@@ -4,4 +4,4 @@ INFODSS Dashboard Group X
 - Tobias Buiten
 - Tim Kläring
 - Marc Avila Pedemonte
-- Floris smit
+- Floris Smit
