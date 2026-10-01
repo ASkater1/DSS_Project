@@ -1,0 +1,88 @@
+\documentclass[a4paper,10pt]{article}
+\input{edit_teamdata.tex}
+\input{report_header.tex}
+\title{\thedoc}
+\makeatletter
+\begin{document}
+
+  \thispagestyle{empty}
+
+\begin{figure}[h]
+    \vspace*{-2cm}
+    \includegraphics[width=\textwidth]{fig/datascience_covid_dashboard.png}
+    \caption*{\tiny Source: 3D: G.Krempl. RNA,mRNA vaccine: Wikipedia Commons. Cases \& Vaccination NL: RIVM.}
+\end{figure}
+\vspace{2cm}
+\begin{center}
+  \textbf{\Huge \@title}
+  \bigskip \\ by 
+  \medskip \\
+  \textbf{\large \@author}
+  \bigskip \\
+  \begin{tabular}{ll}
+    \teammembers{&}{\\}
+  \end{tabular}
+\end{center}
+
+The final report template formatted according to the requirements of INFOMDSS 2026-27.
+
+\vfill
+
+\begin{flushleft}
+  \textbf{\large Utrecht University \hfill \today} 
+\end{flushleft}
+
+\pagebreak
+\thispagestyle{empty}
+
+
+\section*{Executive Summary}
+\input{edit_summary.tex}
+
+\tableofcontents 
+%\listoffigures
+%\listoftables
+
+\clearpage \newpage \setcounter{page}{1}
+
+\section{Business and Data Understanding} \label{sec:businessdataunderstanding}
+\input{edit_businessdataunderstanding.tex}
+
+\section{Data Preparation and modelling} \label{sec:dataprepmodelling} 
+\input{edit_datapreparationmodelling.tex}
+
+\section{Evaluation and Deployment} \label{sec:evaluationdeployment}
+\input{edit_evaluationdeployment.tex}
+
+\section{Additional Guidelines}
+This template contains instruction text throughout, shown in the margins and as bulleted questions. Delete all of it before submitting — keep the headings and write your own text underneath. Chapter 4 should be removed entirely.
+\begin{itemize}
+    \item Length for the concept report is a maximum of 4 pages excluding the front page, contents, literature and appendix;
+    \item Length for the Midterm report is a maximum of 10 pages excluding the front page, contents, literature and appendix;
+    \item Length for the Final report is a maximum of 12 pages excluding the front page, contents, literature and appendix;
+    \item Data Dictionary should not be in this document, but a seperate .pdf, .xlsx or .md file;
+    \item Video should align with what this document tells;
+    \item This document should contain zero or minimal amount of code/documentation, all code and documentation should be on Github;
+    \item For every report that you are delivering there needs to be an additional AI document according to the Utrecht University AI Index level 3 \cite{AI_Index} Which entails which AI tools have been used and why for every student. You will need to keep the logs/prompts you have used, but do not need to submit it.
+    \end{itemize}
+
+\nocite{ProvostFawcett2015} % just to test, replace with your own references
+\bibliographystyle{plain}
+\bibliography{literature.bib}
+
+\clearpage \newpage
+\section{The Team} \label{sec:team}
+\todo[inline]{If your team decides that some members deserve an above-average grade, please state this here and provide arguments for this.}
+\input{edit_teamcontribution_a.tex}
+%\input{edit_teamcontribution_b.tex}
+%\input{edit_teamcontribution_c.tex}
+%\input{edit_teamcontribution_d.tex}
+%\input{edit_teamcontribution_e.tex}
+%\input{edit_teamcontribution_f.tex}
+%\input{edit_teamcontribution_g.tex}
+
+
+
+
+
+\end{document}

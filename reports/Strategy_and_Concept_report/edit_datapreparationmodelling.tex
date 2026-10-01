@@ -1,0 +1,52 @@
+\subsection{Data Preparation.}
+
+\begin{itemize}
+  \item What is the format of the data?
+  \begin{itemize} 
+    \item Is it static, time-series or streaming data?
+    \item How many instances are there?
+    \item Is the data representative, or is there a bias?
+    \item What structure does the data have?
+    \item Which variables are there, what do they represent, 
+      \\ what is their type/encoding?
+    \item Are there obvious data problems?
+      \\ E.g., missing values, different scales, class imbalance, \dots?
+      \\ (This requires some explanatory data analysis and transition into phase 3)
+  \end{itemize}
+  \item How are you using the data and the variables therein?
+    \\ At this point, check that you have all the data needed for your planned analytics. That is, that you have data with all relevant variables (features, classes/responses) and sufficient instances.
+\end{itemize}
+Acquire and prepare the data for analytics. Address the following aspects, and complete the data dictionary from step 2 by documenting your findings and actions accordingly:
+\begin{itemize}
+  \setlength\itemsep{0em}
+  \item For all variables, analyse its distribution. Depending on the type of variable, choose the appropriate tool. E.g., a contingency table for categorical variables, or visualisations such as box plots, kernel density estimates, violin plots, or similar.
+  \item Investigate surprising distributions, identify potential data quality problems, and if possible resolve them:
+  \begin{description}
+    \item[Missing values] Flag obvious missing values as such as NA, ?, ``'', \dots. For this project, it is recommended to encode them by \emph{nan} in Python (and only to impute them when necessary for an analytics technique)
+    \item[Outliers] Mark outliers as potential data problem (for this project, it is advised \emph{not} to remove them)
+    \item[Encoding problems] Replace misspelled attribute values in categorical variables
+    \item[Duplicate or redundant variables] Mark redundancies between variables (avoid having both in your model)
+    \item[Duplicate instances] If you can safely identify duplicates of instances (e.g., by IDs), drop them
+    \item[Sparse groups] If necessary, combine sparse groups in features or labels
+    \item[Feature Engineering] Where appropriate, create additional aggregates of variables (e.g., ratios, or aggregations)
+    \item[Class imbalance, biases] If data for fitting a prediction model is imbalanced or biased (not representative of the population you would like to model), prepare for debiasing, reweighting or resampling
+  \end{description}
+\end{itemize}\\
+
+Make sure that this is not a list of things you have checked off. The list format should be the data dictionary solely. This chapter should showcase how you prepared the data, variables, structure of the data, techniques you used to transform the data such that it is usable for the next chapter.
+
+\subsection{Modelling.}
+For data modelling, use descriptive, predictive and (optionally) prescriptive analytics techniques. Thereby, pay attention to the following aspects:
+\begin{itemize}
+  \setlength\itemsep{0em}
+  \item Which methods could you use for the intended type of analytics?
+  \\ What are their pros/cons, what are their requirements/limitations?
+  \item Which methods (and pre-/post-processing steps) have you chosen?
+    \\ Document your choice and provide a justification.
+  \item Which hyperparameter require tuning, what are reasonable defaults or parameter ranges? 
+    \\ Decide and document how hyperparameters are chosen/tuned.
+  \item Partition your data such that you avoid overfitting, and that you ensure a fair and realistic evaluation.
+\end{itemize}\\
+This chapter should showcase the descriptive, predictive and prescriptive techniques you have used. Use visualisations where necessary and make sure that it's a tangible and comprehensive story that aligns with the usecase. Don't go into evaluating your modelling.
+
+At this point the midterm stops and has reached around 10 pages excluding the front page, contents, Literature and Appendix. You do not have to submit this report, but it's highly suggested to be this far during the midterm. It is expected that the team has done the descriptive statistics and have an idea on a predictive technique. It is not expected to already have implemented the predictive technique.

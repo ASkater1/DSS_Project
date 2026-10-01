@@ -1,0 +1,23 @@
+\documentclass[a4paper,10pt]{article}
+\input{edit_teamdata.tex}
+\input{report_header.tex}
+\title{\thestrategy}
+\makeatletter
+\begin{document}
+\thispagestyle{empty}
+\renewcommand*{\thesubsection}{\arabic{subsection}}
+\newcounter{questioncounter}[section]
+\setcounter{questioncounter}{1}
+\setcounter{page}{1}
+\setcounter{section}{1}
+
+\section*{Strategy and Concept} \label{sec:businessdataunderstanding}
+\textbf{\large Team~``\@author''}
+
+\input{edit_businessdataunderstanding.tex}
+
+\nocite{ProvostFawcett2015} % just to test, replace with your own references
+\bibliographystyle{plain}
+\bibliography{literature.bib}
+
+\end{document}

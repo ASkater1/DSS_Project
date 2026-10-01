@@ -1,0 +1,51 @@
+% This file contains a few packages and scripts
+
+\usepackage[utf8]{inputenc}
+\usepackage{subcaption}
+\usepackage[english]{babel}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{todonotes}
+\usepackage{tabularx}
+\usepackage{booktabs}
+
+\usepackage{wrapfig} % for wrapping text around figures, use \begin{wrapfigure}[lineheight]{position}{width}
+
+\usepackage{hyperref}
+\hypersetup{backref,pdfborder=0 0 0} 
+\urlstyle{sf}
+
+\usepackage[par]{kantlipsum} % par or nopar
+
+\newcommand{\teammembers}[2]{
+  \ifdefined\teammemberGname
+    \teammemberAname~ #1(\textit{\teammemberAstudentid}) #2
+    \teammemberBname~ #1(\textit{\teammemberBstudentid}) #2  
+    \teammemberCname~ #1(\textit{\teammemberCstudentid}) #2
+    \teammemberDname~ #1(\textit{\teammemberDstudentid}) #2
+    \teammemberEname~ #1(\textit{\teammemberEstudentid}) #2
+    \teammemberFname~ #1(\textit{\teammemberFstudentid}) #2
+    \teammemberGname~ #1(\textit{\teammemberGstudentid}) #2
+  \else
+    \teammemberAname~ #1(\textit{\teammemberAstudentid}) #2
+    \teammemberBname~ #1(\textit{\teammemberBstudentid}) #2  
+    \teammemberCname~ #1(\textit{\teammemberCstudentid}) #2
+    \teammemberDname~ #1(\textit{\teammemberDstudentid}) #2
+    \teammemberEname~ #1(\textit{\teammemberEstudentid}) #2
+    \teammemberFname~ #1(\textit{\teammemberFstudentid}) #2
+  \fi
+}
+\def\thedoc{Final Report}
+\def\thestrategy{Strategy \& Concept}
+\def\theproject{Practical Team Project}
+\def\thecourse{Data Science and Society (INFOMDSS)}
+\author{\teamname~(\teamnumber)}
+\ifdefined\finalreport
+  \def\plan{}
+\else
+  \def\plan{(Planned)}
+\fi
+
