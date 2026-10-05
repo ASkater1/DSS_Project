@@ -1,7 +1,7 @@
 name: dss_dashboard_supermarkets
 
 services:
-  app:
+  dashboard_supermarkets:
     container_name: dashboard_supermarkets
     build: .
     volumes:
