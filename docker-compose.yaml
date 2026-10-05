@@ -1,0 +1,32 @@
+name: dss_dashboard_supermarkets
+
+services:
+  app:
+    container_name: dashboard_supermarkets
+    build: .
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    ports:
+      - '8501:8501'
+    depends_on:
+      - database
+    restart: always
+    healthcheck:
+      disable: true
+
+  database:
+    container_name: database
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME}
+      DB_STORAGE_TYPE: 'HDD'
+    volumes:
+      - db:/var/lib/postgresql/data
+    restart: always
+    
+volumes:
+  db:
