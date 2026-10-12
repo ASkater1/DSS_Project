@@ -11,8 +11,8 @@ You do NOT need to change this file for the exercise.
 import os
 import streamlit as st
 
-st.title("Hello DSS")
-st.write("If you can read this in your browser, the app is running.")
+st.title("Prototype dashboard")
+st.write("If this works, the real work can start")
 
 # Part (b) only: this block reports whether a database is reachable.
 # It is here so you can tell whether your docker-compose setup worked.
