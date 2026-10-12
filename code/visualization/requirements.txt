@@ -1,3 +1,2 @@
-#sample 
+streamlit==1.37.0
 psycopg2-binary==2.9.9
-streamlit == 1.37.0

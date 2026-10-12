@@ -24,6 +24,15 @@ services:
       database:
         condition: service_healthy
     restart: no
+  visualization:
+    container_name: dashboard
+    build: ./code/visualization/
+    env_file:
+      - .env
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: always
 
   database:
     container_name: database
