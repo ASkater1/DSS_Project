@@ -1,67 +1,38 @@
+"""INFOMDSS - Exercise 1 starter app.
 
-import streamlit as st
+Run it locally first, so you know what "working" looks like:
+    pip install -r requirements.txt
+    streamlit run app.py
+Then open http://localhost:8501 in your browser.
+
+You do NOT need to change this file for the exercise.
+"""
+
 import os
+import streamlit as st
 
+st.title("Hello DSS")
+st.write("If you can read this in your browser, the app is running.")
 
-# Get the project root directory from this script
-PROJECT_DIR = Path(__file__).resolve().parents[3]
+# Part (b) only: this block reports whether a database is reachable.
+# It is here so you can tell whether your docker-compose setup worked.
+st.subheader("Database connection")
+host = os.environ.get("DB_HOST", "not set")
+st.write(f"DB_HOST is: {host}")
 
-# Folder containing the data
-DATA_DIR = PROJECT_DIR / "data" / "raw" # or processed
-
-# List of supermarkets
-supermarkets = ["AH", "Jumbo", "Lidl", "Plus"]
-
-# Reading the official data
-# yet to-do
-
-
-# Making the structure with a test invented dataset
-df_test = pd.DataFrame({
-    "product_id": [1, 2, 3],
-    "product_name": ["Milk", "Bread", "Eggs"],
-    "price": [1.50, 2.20, 3.00]
-})
-
-
-# Read database connection settings
-db_host = os.environ["DB_HOST"]
-db_name = os.environ["DB_NAME"]
-db_user = os.environ["DB_USER"]
-db_password = os.environ["DB_PASSWORD"]
-
-    
-
-# Opening a connection to the PostgreSQL database
-db_conn = create_engine(f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:5432/{db_name}")
-# create_engine("postgresql+psycopg2://myuser:mypassword@localhost:5432/mydatabase")
-
-# Other option to do it:
-# db_url = URL.create(
-#     "postgresql+psycopg2",
-#     username=db_user,
-#     password=db_password,
-#     host=db_host,
-#     port=5432,
-#     database=db_name
-# )
-
-
-# Creating a test table and inserting the data-frame
-df_test.to_sql(
-    "test_products",
-    db_conn,
-    if_exists="replace",
-    index=False
-)
-
-print("Data loaded successfully!")
-
-
-# Read the table into a pandas data-frame
-mytable = pd.read_sql("SELECT * FROM test_products;", db_conn)
-print(mytable)
-
-
-
-
+try:
+    import psycopg2
+    conn = psycopg2.connect(
+        host=os.environ.get("DB_HOST", "localhost"),
+        port=5432,
+        dbname=os.environ.get("DB_NAME", "dss"),
+        user=os.environ.get("DB_USER", "dss"),
+        password=os.environ.get("DB_PASSWORD", ""),
+        connect_timeout=3,
+    )
+    cur = conn.cursor()
+    cur.execute("SELECT version();")
+    st.success(f"Connected. PostgreSQL says: {cur.fetchone()[0][:40]}...")
+    conn.close()
+except Exception as e:
+    st.error(f"Not connected: {type(e).__name__}: {e}")
