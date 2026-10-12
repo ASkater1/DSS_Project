@@ -1,20 +1,29 @@
 name: dss_dashboard_supermarkets
 
 services:
-  dashboard_supermarkets:
-    container_name: dashboard_supermarkets
-    build: .
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
+  #dashboard_supermarkets:
+  #  container_name: dashboard_supermarkets
+  #  build: .
+  #  volumes:
+  #    - /etc/localtime:/etc/localtime:ro
+  #  env_file:
+  #    - .env
+  #  ports:
+  #    - '8501:8501'
+  #  depends_on:
+  #    - database
+  #  restart: always
+  #  healthcheck:
+  #    disable: true
+  static_importer:
+    container_name: static
+    build: ./code/importer/static/
     env_file:
       - .env
-    ports:
-      - '8501:8501'
     depends_on:
-      - database
-    restart: always
-    healthcheck:
-      disable: true
+      database:
+        condition: service_healthy
+    restart: no
 
   database:
     container_name: database
@@ -27,6 +36,12 @@ services:
     volumes:
       - db:/var/lib/postgresql/data
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
     
 volumes:
-  db:
+  db: #might want to make this persistent with 
