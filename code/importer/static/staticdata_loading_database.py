@@ -6,11 +6,11 @@
 # Importing necessary libraries
 import pandas as pd
 from sqlalchemy import create_engine
-from sqlalchemy.engine import URL
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-import openpyxl
+
+
 
 
 
@@ -22,6 +22,15 @@ INPUT_DATA_DIR = PROJECT_DIR / "data" / "raw"
 
 # Folder containing the cleaned and processed data
 OUTPUT_DATA_DIR = PROJECT_DIR / "data" / "processed" 
+
+# Name of the table where to insert the data in the PostgreSQL Database
+table_name = "name_of_the_table"  # still need to put the final name whenever is created
+
+# Parameter to define the amount of instances to divide the processing of the dataframes
+chunksize = 250
+
+# Parameter to define the amount of instances to insert at a time into the SQL tables
+inserting_chunksize = 5000
 
 # List of supermarkets
 supermarkets = ["AH", "Jumbo", "Lidl", "Plus"]
@@ -66,6 +75,8 @@ column_mappings = {
 
 # Dictionary that assigns a unique ID to each Supermarket
 supermarket_ids = {"AH": 1, "Jumbo": 2, "Lidl": 3, "Plus": 4}
+
+
 
 
 
@@ -144,87 +155,78 @@ def preprocess_supermarket(df_long: pd.DataFrame) -> pd.DataFrame:
 
 
 
+# Function to check the quality of the cleaned supermarket data
+def check_data_quality(df_clean: pd.DataFrame):
 
+    # Counting of suspicious price values
+    zero_prices = (df_clean["Price"] == 0).sum()
+    prices_999 = (df_clean["Price"] == 999).sum()
 
-# Testing the reading and transformation of supermarket data
-for supermarket in supermarkets:
+    # Counting of missing product information
+    missing_ids = df_clean["Product_ID"].isna().sum()
+    missing_names = df_clean["Product_Name"].isna().sum()
 
-    print(f"\nSupermarket: {supermarket}")
+    # Counting of duplicated product-date combinations
+    duplicates = df_clean.duplicated(subset=["Supermarket_ID", "Product_ID", "Date"]).sum()
 
-    # Read the CSV in chunks
-    for chunk_number, datachunk in enumerate(reader_supermarket(supermarket, chunksize=250), start=1):
-
-        # Transform the current chunk into long format
-        df_long = transform_supermarket(supermarket, datachunk)
-
-        # Apply preprocessing and cleaning
-        df_clean = preprocess_supermarket(df_long)
-
-        # Check how many rows were removed during preprocessing
-        removed_rows = len(df_long) - len(df_clean)
-
-        print(f"\nChunk {chunk_number}:")
-        print(f"Original CSV: {datachunk.shape}")
-        print(f"Long format: {df_long.shape}")
-        print(f"After cleaning: {df_clean.shape}")
-        print(f"Removed rows: {removed_rows}")
-        print(df_clean.head(3))
-
-        # Only test the first two chunks of each supermarket
-        if chunk_number == 2:
-            break
-
-
-    
-# Stop the script here when running for testing ---------------------------------------------------------------------
-import sys 
-sys.exit()
+    # Printing the results
+    print("Data Quality Report:")
+    print("Total rows:", len(df_clean))
+    print("Prices equal to 0:", zero_prices)
+    print("Prices equal to 999:", prices_999)
+    print("Missing Product IDs:", missing_ids)
+    print("Missing Product Names:", missing_names)
+    print("Duplicated product-date combinations:", duplicates)
 
 
 
-# Testing the transformation for all supermarkets
-output_file = PROJECT_DIR / "code" / "importer" / "static" / "output_test.xlsx"
-with pd.ExcelWriter(output_file, engine = "openpyxl") as writer:
+
+
+# Main execution
+if __name__ == "__main__":
+
+    # # Reading the .env file and loading the variables into the python environment
+    # load_dotenv(PROJECT_DIR / ".env")
+
+    # # Read database connection settings
+    # db_host = os.environ["DB_HOST"] # "localhost"  
+    # db_name = os.environ["DB_NAME"] # this command allows python to access env variables that are loaded
+    # db_user = os.environ["DB_USER"]
+    # db_password = os.environ["DB_PASSWORD"]
+
+    # # Opening a connection to the PostgreSQL database 
+    # db_conn = create_engine(f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:5432/{db_name}")
+
+    # # Clear the existing static data before starting a new load
+    # with db_conn.begin() as conn:
+    #     conn.exec_driver_sql(f"TRUNCATE TABLE {table_name};")
+
+    # Testing the reading and transformation of supermarket data
     for supermarket in supermarkets:
-        df_long = transform_supermarket(supermarket, nrows = 5)
-        df_long.to_excel(writer, sheet_name = supermarket, index = False)
+        
+        print(f"\nSupermarket: {supermarket}")
 
-print("Excel file created")
+        # Read the CSV in chunks
+        for chunk_number, datachunk in enumerate(reader_supermarket(supermarket, chunksize), start=1):
 
-#--------------------------------------------------------------
+            # Transform the current chunk into long format
+            df_long = transform_supermarket(supermarket, datachunk)
 
+            # Apply preprocessing and cleaning
+            df_clean = preprocess_supermarket(df_long)
+            
+            # Optional: get an idea of the data-quality of the df (comment if not wanted)
+            check_data_quality(df_clean)
 
-
-
-
-# Making the structure with a test invented dataset
-df_test = pd.DataFrame({
-    "product_id": [1, 2, 3],
-    "product_name": ["Milk", "Bread", "Eggs"],
-    "price": [1.50, 2.20, 3.00]
-})
-
-
-# This command reads the .env file and loads the variables into the python environment
-load_dotenv(PROJECT_DIR / ".env")
-
-# Read database connection settings
-db_host = "localhost" # os.environ["DB_HOST"]
-db_name = os.environ["DB_NAME"] # this command allows python to access env variables that are loaded
-db_user = os.environ["DB_USER"]
-db_password = os.environ["DB_PASSWORD"]
+            # Inserting the cleaned dataframes to the PostgreSQL table
+            # df_clean.to_sql(name = table_name, con = db_conn, if_exists = "append", index = False, chunksize = inserting_chunksize)
 
 
+            # Only test the first two chunks of each supermarket
+            if chunk_number == 2:
+                break
 
-# Opening a connection to the PostgreSQL database
-db_conn = create_engine(f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:5432/{db_name}")
 
-
-# Creating a test table and inserting the data-frame
-df_test.to_sql("test_products", db_conn, if_exists="replace", index=False)
-
-print("Data loaded successfully!")
-
-# Read the table into a pandas data-frame
-mytable = pd.read_sql("SELECT * FROM test_products;", db_conn)
-print(mytable)
+# To make quick test: Read the table into a pandas data-frame
+# mytable = pd.read_sql(f"SELECT * FROM {table_name};", db_conn)
+# print(mytable)
