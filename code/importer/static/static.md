@@ -35,7 +35,6 @@ The PostgreSQL database connection settings are loaded from a .env file located 
 
 **Note**: The current script uses localhost as the database host. The connection settings may need to be adjusted depending on the execution environment.
 
-
 **Note**: The current script has the database connection parts commented since the PostgreSQL database table is not yet created. 
 
 _The table to store this static data will need to have the same columns as the ones defined in the variable: final_columns_
