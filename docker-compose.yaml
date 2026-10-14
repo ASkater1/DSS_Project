@@ -20,6 +20,20 @@ services:
     build: ./code/importer/static/
     env_file:
       - .env
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./code/visualization/
+          target: /app
+          ignore:
+            - requirements.txt
+            - "*.md"
+            - Dockerfile
+        - action: rebuild
+          path: ./code/visualization/
+          ignore:
+            - "*.md"
+            - "*.py"
     depends_on:
       database:
         condition: service_healthy
@@ -29,6 +43,20 @@ services:
     build: ./code/visualization/
     env_file:
       - .env
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./code/visualization/
+          target: /app
+          ignore:
+            - requirements.txt
+            - "*.md"
+            - Dockerfile
+        - action: rebuild
+          path: ./code/visualization/
+          ignore:
+            - "*.md"
+            - "*.py"
     depends_on:
       database:
         condition: service_healthy
@@ -50,7 +78,7 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
-      timeout: 5s
+      timeout: 10s
       retries: 5
 
     

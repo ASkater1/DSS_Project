@@ -14,6 +14,20 @@ Some services like the data base can just be reused from publicly available imag
  * <Subprocess>.md to contain a short summary of what the Process is actually doing, which environment variables it might access and what accesses are required for it.
 
 ## How to run the dashboard locally
-0. Make sure, you copied the .env.sample to .env and overwritten the personally needed configuration!
-1. In the root repository folder use ´docker compose up´ (add a ´-d´ for starting in the background)
-2. Once running you can access your dashboard via http://localhost:8501 (Or whatever port was specified in your .env)
+### Requirements:
+* Network Connection
+* **Docker (+Compose)** installed
+* installed **Python >3.12**
+* **Make** installed
+
+### Starting a development instance
+1. run *make develop* inside a terminal in the root directory of the repository.
+2. Once running you can access your dashboard via http://localhost:8501
+>*The Development instance is configured in a Way, that allows it to rebuild/restart each container where a source code change was detected. You will need to keep the terminal running and can follow the log to see if your change was actually detected and the container rebuild.*
+
+### Configuring the setup
+1. Run *make .env* to recreate a Environment variable set with the default values
+2. Edit the .env file to your liking, if you dont want default password/user setups.
+
+### All the other deployment stuff
+You might try the terminal command *make help* to find all other available targets.
