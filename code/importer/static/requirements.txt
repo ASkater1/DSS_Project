@@ -1,2 +1,5 @@
-#sample 
+#Required dependencies to execute the static loader 
+pandas
 psycopg2-binary==2.9.9
+SQLAlchemy
+python-dotenv
