@@ -73,6 +73,7 @@ services:
       POSTGRES_DB: ${DB_NAME}
       DB_STORAGE_TYPE: 'HDD'
     volumes:
+      - ./data/db/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql
       - db:/var/lib/postgresql/data
     restart: always
     healthcheck:
