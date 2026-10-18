@@ -5,10 +5,6 @@ import streamlit as st
 import plotly.express as px
 import requests
 
-#Below is code for the assignment 0.2 prototype dashboard. The DB connection is only used to check whether the connection still works.
-#This should be removed when working on the actual prototype dashboard. All code here is placeholder
-st.title("Prototype dashboard")
-st.write("If this works, the real work can start")
 st.subheader("Database connection")
 host = os.environ.get("DB_HOST", "not set")
 st.write(f"DB_HOST is: {host}")
@@ -30,61 +26,472 @@ try:
 except Exception as e:
     st.error(f"Not connected: {type(e).__name__}: {e}")
 
-# Experimentation with metrics using st.metric, line chart using plotly express, histogram using plotly express, and percentage metrics using st.metric
-col1, col2, col3, col4 = st.columns(4, gap='small')
+#Below is code for the assignment 0.2 prototype dashboard. The DB connection is only used to check whether the connection still works.
+#This should be removed when working on the actual prototype dashboard. All code here is placeholder
 
-with col1:
-    st.metric(label="Total supermarkets", value="4392", delta="+2.1%")
+# Create dummy data based on the ER diagram
+# This will later be replaced with data from our database
 
-with col2:
-    st.metric(label="Average basket price", value="€25.50", delta="+3%")
+# Supermarket names and their market shares
 
-with col3:
-    st.metric(label="Market coverage", value="75%")
+supermarkets = pd.DataFrame({
+    "SupermarketID": [1, 2, 3, 4],
+    "Name": ["Albert Heijn", "Jumbo", "Lidl", "Plus"],
+    "Year": [2024, 2024, 2024, 2024],
+    "MarketShare": [37, 22, 11, 6]
+})
 
-with col4:
-    st.metric(label="Cybersecurity incidents", value="1", delta="-100%")
+# Product information including whether a product belongs to the essential basket
 
-col1, col2 = st.columns(2, gap='small')
-with col1:
-    line_chart_data = pd.DataFrame(
-        np.random.randn(20, 4),
-        columns=["Albert Heijn", "Jumbo", "Lidl", "Plus"],
+products = pd.DataFrame({
+    "ProductID": [1, 2, 3, 4],
+    "Name": [
+        "Halfvolle melk 1L",
+        "Volkoren brood",
+        "Bananen 1kg",
+        "Verse franse friet 700g"
+    ],
+    "IsBasketProduct": [True, True, True, False],
+    "Brand": ["Huismerk", "Huismerk", "Huismerk", "AH"],
+    "Category": [
+        "Zuivel",
+        "Brood",
+        "Groente en fruit",
+        "Aardappelen"
+    ],
+    "Description": [
+        "Halfvolle melk",
+        "Volkoren brood",
+        "Verse bananen",
+        "Verse franse friet"
+    ]
+})
+
+# Create dummy prices for each supermarket and product
+# Prices increase slightly each month to simulate price changes over time
+price_rows = []
+
+for month in range(1, 7):
+    for supermarket_id in supermarkets["SupermarketID"]:
+        for product_id in products["ProductID"]:
+
+            price = 0.80 + product_id * 0.45
+            price += supermarket_id * 0.08
+            price += month * 0.03
+
+            price_rows.append({
+                "SupermarketID": supermarket_id,
+                "ProductID": product_id,
+                "Price": round(price, 2),
+                "Date": pd.Timestamp(2025, month, 1)
+            })
+
+supermarket_product = pd.DataFrame(price_rows)
+
+# Combine the supermarket and product data using their IDs
+# This makes it possible to compare product prices between supermarkets
+prices = supermarket_product.merge(
+    supermarkets[["SupermarketID", "Name"]],
+    on="SupermarketID"
+)
+
+prices = prices.rename(columns={"Name": "SupermarketName"})
+
+prices = prices.merge(
+    products,
+    on="ProductID"
+)
+
+# Create dummy municipality data for supermarket accessibility
+# Includes population, distance to closest supermarket and supermarkets within 1, 3 and 5 km
+municipalities = pd.DataFrame({
+    "MunicipalityID": list(range(1, 11)),
+    "Name": [
+        "Amsterdam", "Rotterdam", "Utrecht",
+        "Den Haag", "Eindhoven", "Groningen",
+        "Zeist", "Amersfoort", "Tilburg", "Maastricht"
+    ],
+    "Population": [
+        920000, 670000, 370000, 570000, 245000,
+        240000, 66000, 160000, 230000, 125000
+    ],
+    "Year": [2025] * 10,
+    "DistanceClosestSupermarket": [
+        0.3, 0.4, 0.2, 0.4, 0.5,
+        0.6, 0.8, 0.5, 0.6, 0.7
+    ],
+    "SupermarketsWithin1KM": [
+        20, 16, 12, 13, 8, 7, 3, 6, 7, 4
+    ],
+    "SupermarketsWithin3KM": [
+        60, 45, 35, 40, 24, 20, 9, 18, 21, 13
+    ],
+    "SupermarketsWithin5KM": [
+        100, 80, 60, 70, 43, 35, 16, 30, 36, 23
+    ]
+})
+
+# Create the dashboard with three tabs
+# Each tab focuses on a different part of supermarket affordability or accessibility
+
+st.title("Food Security Dashboard")
+st.write("Monitoring supermarket affordability and accessibility in the Netherlands")
+
+tab1, tab2, tab3 = st.tabs([
+    "Overview",
+    "Prices",
+    "Municipalities"
+])
+
+# OVERVIEW TAB
+# Shows general supermarket information, market shares and essential basket prices
+
+with tab1:
+
+    st.header("Supermarket Overview")
+
+# Use the most recent prices
+    latest_date = prices["Date"].max()
+    latest_prices = prices[prices["Date"] == latest_date]
+
+# Only essential basket products
+    basket = latest_prices[
+        latest_prices["IsBasketProduct"] == True
+    ]
+
+# Calculate basket price per supermarket
+    basket_prices = basket.groupby(
+        "SupermarketName"
+    )["Price"].sum().reset_index()
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric(
+            label="Supermarket chains",
+            value=len(supermarkets)
+        )
+
+    with col2:
+        st.metric(
+            label="Combined market share",
+            value=f"{supermarkets['MarketShare'].sum()}%"
+        )
+
+    with col3:
+        st.metric(
+            label="Average basket price",
+            value=f"€{basket_prices['Price'].mean():.2f}"
+        )
+
+    st.subheader("Market share and basket prices")
+
+# Combine the supermarket data with basket prices
+    comparison = basket_prices.merge(
+        supermarkets,
+        left_on="SupermarketName",
+        right_on="Name"
     )
-    fig = px.line(line_chart_data, x=line_chart_data.index, y=["Albert Heijn", "Jumbo", "Lidl", "Plus"], title="Line Chart of Random Data")
-    st.plotly_chart(fig)
 
-with col2:
-    #Experimentation with histogram using plotly express
-    geojson_url = "https://api.pdok.nl/kadaster/brk-bestuurlijke-gebieden/ogc/v1/collections/gemeentegebied/items?crs=http%3A%2F%2Fwww.opengis.net%2Fdef%2Fcrs%2FOGC%2F1.3%2FCRS84&f=json&limit=1000"
-    response = requests.get(geojson_url)
-    geojson_data = response.json()
-    if geojson_data is None:
-        st.error("Failed to fetch geojson data")
-    else:
+    fig = px.scatter(
+        comparison,
+        x="MarketShare",
+        y="Price",
+        color="SupermarketName",
+        hover_name="SupermarketName",
+        labels={
+            "MarketShare": "Market share (%)",
+            "Price": "Basket price (€)"
+        },
+        title="Market share compared to essential basket price"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.write(
+        "This chart shows whether supermarkets with a "
+        "larger market share have higher or lower basket prices."
+    )
+
+# PRICES TAB
+# Allows users to compare supermarket prices and monitor price development over time
+
+with tab2:
+
+    st.header("Supermarket Prices")
+
+    st.write("Compare supermarket prices and monitor changes over time.")
+
+# Filters
+    col1, col2 = st.columns(2)
+
+    with col1:
+        selected_supermarkets = st.multiselect(
+            "Select supermarkets",
+            supermarkets["Name"].tolist(),
+            default=supermarkets["Name"].tolist()
+        )
+
+    with col2:
+        selected_category = st.selectbox(
+            "Select category",
+            ["All categories"] + products["Category"].unique().tolist()
+        )
+
+# Filter data
+    filtered_prices = prices[
+        prices["SupermarketName"].isin(selected_supermarkets)
+    ]
+
+    if selected_category != "All categories":
+        filtered_prices = filtered_prices[
+            filtered_prices["Category"] == selected_category
+        ]
+
+    latest_prices = filtered_prices[
+        filtered_prices["Date"] == filtered_prices["Date"].max()
+    ]
+
+    basket_prices = latest_prices[
+        latest_prices["IsBasketProduct"] == True
+    ]
+
+# Calculate the total price of essential basket products for each supermarket
+
+    basket_totals = basket_prices.groupby(
+        "SupermarketName"
+    )["Price"].sum()
+
+# Only show the price metrics when data is available
+
+    if not basket_totals.empty:
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                label="Average basket price",
+                value=f"€{basket_totals.mean():.2f}"
+            )
+
+        with col2:
+            st.metric(
+                label="Lowest basket price",
+                value=f"€{basket_totals.min():.2f}"
+            )
+
+        with col3:
+            st.metric(
+                label="Highest basket price",
+                value=f"€{basket_totals.max():.2f}"
+            )
+
+    st.subheader("Price development over time")
+
+# Calculate basket prices for each supermarket over time
+# This helps identify whether essential food products are becoming more expensive
+    trend = filtered_prices[
+        filtered_prices["IsBasketProduct"] == True
+    ]
+
+    trend = trend.groupby(
+        ["Date", "SupermarketName"]
+    )["Price"].sum().reset_index()
+
+    fig = px.line(
+        trend,
+        x="Date",
+        y="Price",
+        color="SupermarketName",
+        markers=True,
+        title="Essential basket price over time",
+        labels={
+            "Date": "Date",
+            "Price": "Basket price (€)",
+            "SupermarketName": "Supermarket"
+        }
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+    st.subheader("Price comparison")
+
+# Add a search bar so users can find individual products more easily
+    search_product = st.text_input(
+        "Search for a product",
+        placeholder="Search for milk, bread, bananas..."
+    )
+
+# Filter products by name without considering capital letters
+# Partial product names can also be used
+    search_results = latest_prices[
+        latest_prices["Name"].str.contains(
+            search_product,
+            case=False,
+            na=False,
+            regex=False
+        )
+    ]
+
+# Compare prices between supermarkets
+    comparison = search_results.pivot_table(
+        index="Name",
+        columns="SupermarketName",
+        values="Price"
+    )
+
+# Display results
+    st.dataframe(
+        comparison.round(2),
+        use_container_width=True
+    )
+
+    st.subheader("Average product price by category")
+
+# Calculate the average product price per category over time
+# This helps identify categories where prices are increasing
+    category_prices = filtered_prices.groupby(
+        ["Date", "Category"]
+    )["Price"].mean().reset_index()
+
+    fig = px.line(
+        category_prices,
+        x="Date",
+        y="Price",
+        color="Category",
+        markers=True,
+        labels={
+            "Price": "Average price (€)",
+            "Date": "Date"
+        }
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+# MUNICIPALITIES TAB
+# Shows supermarket accessibility in different Dutch municipalities
+
+with tab3:
+
+    st.header("Supermarket Accessibility")
+
+    st.write("Explore supermarket accessibility across Dutch municipalities.")
+
+# Calculate accessibility score using 1km, 3km and 5km
+    municipalities["AccessibilityScore"] = (
+        municipalities["SupermarketsWithin1KM"] * 1.0
+        + (municipalities["SupermarketsWithin3KM"]
+           - municipalities["SupermarketsWithin1KM"]) * 0.5
+        + (municipalities["SupermarketsWithin5KM"]
+           - municipalities["SupermarketsWithin3KM"]) * 0.2
+    )
+
+# Calculate accessibility score per 10,000 residents
+    municipalities["AccessibilityPer10000"] = (
+        municipalities["AccessibilityScore"]
+        / municipalities["Population"] * 10000
+    )
+
+# KPI metrics
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric(
+            label="Average accessibility score",
+            value=f"{municipalities['AccessibilityScore'].mean():.1f}"
+        )
+
+    with col2:
+        st.metric(
+            label="Average distance to closest supermarket",
+            value=f"{municipalities['DistanceClosestSupermarket'].mean():.2f} km"
+        )
+
+    with col3:
+        st.metric(
+            label="Lowest accessibility score",
+            value=f"{municipalities['AccessibilityScore'].min():.1f}"
+        )
+
+# Retrieve municipality boundaries from PDOK
+# The map uses our calculated accessibility score per 10,000 residents
+# Green indicates higher scores and red indicates lower scores
+    st.subheader("Supermarket Accessibility by Municipality")
+
+    geojson_url = (
+        "https://api.pdok.nl/kadaster/brk-bestuurlijke-gebieden/"
+        "ogc/v1/collections/gemeentegebied/items"
+        "?crs=http%3A%2F%2Fwww.opengis.net%2Fdef%2Fcrs%2FOGC%2F1.3%2FCRS84"
+        "&f=json&limit=1000"
+    )
+
+    try:
+        response = requests.get(geojson_url, timeout=15)
+        response.raise_for_status()
         geojson_data = response.json()
 
-    df=pd.DataFrame({
-        "Gemeente": ["Utrecht", "De Bilt", "Zeist", "Nijkerk", "Amersfoort", "Ede", "Barneveld", "Veenendaal", "Amsterdam", "Rotterdam", "Den Haag", "Groningen", "Maastricht", "Eindhoven", "Tilburg", "Utrechtse Heuvelrug", "Nieuwegein", "Houten", "Bunnik", "Renswoude"],
-        "Waarde": [10, 100, 50, 80, 60, 90, 70, 40, 30, 20, 15, 25, 35, 45, 55, 65, 75, 85, 95, 5]
-    })
+        fig = px.choropleth_mapbox(
+            municipalities,
+            geojson=geojson_data,
+            locations="Name",
+            featureidkey="properties.naam",
+            color="AccessibilityPer10000",
+            color_continuous_scale="RdYlGn",
+            mapbox_style="open-street-map",
+            zoom=6,
+            center={"lat": 52.1326, "lon": 5.2986},
+            opacity=0.6,
+            hover_data=[
+                "Population",
+                "SupermarketsWithin1KM",
+                "SupermarketsWithin3KM",
+                "SupermarketsWithin5KM",
+                "DistanceClosestSupermarket"
+            ],
+            labels={
+                "AccessibilityPer10000": "Accessibility per 10,000 residents"
+            }
+        )
 
-    fig = px.choropleth_mapbox(
-        df,
-        geojson=geojson_data,
-        locations="Gemeente",
-        featureidkey="properties.naam",
-        color="Waarde",
-        color_continuous_scale="Plasma",
-        mapbox_style="open-street-map",
-        zoom=5,
-        center={"lat": 52.1326, "lon": 5.2986},
-        opacity=0.5,
-        labels={"Value": "Score"},
+        st.plotly_chart(fig, use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Map could not be loaded: {e}")
+
+# Compare municipality population with supermarket accessibility
+# This helps identify municipalities with relatively low accessibility scores
+    st.subheader("Municipality Comparison")
+
+    fig = px.scatter(
+        municipalities,
+        x="Population",
+        y="AccessibilityPer10000",
+        hover_name="Name",
+        title="Supermarket Accessibility Compared to Population",
+        labels={
+            "Population": "Municipality population",
+            "AccessibilityPer10000": "Accessibility per 10,000 residents"
+        }
     )
-    st.plotly_chart(fig)
 
-#Experimentation with percentage metrics using st.metric
-coverage_percentage = 0.25
-st.metric(label="Coverage percentage", value=f"{coverage_percentage*100}%")
+    st.plotly_chart(fig, use_container_width=True)
 
+# Display the municipality data and calculated accessibility scores in a table
+# Users can inspect the values behind the map and scatter plot
+    st.subheader("Municipality Data")
+
+    st.dataframe(
+        municipalities[
+            [
+                "Name",
+                "Population",
+                "SupermarketsWithin1KM",
+                "SupermarketsWithin3KM",
+                "SupermarketsWithin5KM",
+                "AccessibilityScore",
+                "AccessibilityPer10000"
+            ]
+        ],
+        use_container_width=True
+    )
