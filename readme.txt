@@ -9,6 +9,7 @@ by:
 
 #Please also look at the provided readme.md
 Running the dashboard
+    0. Unzip all the files or clone the repository from git.science.uu.nl
     1. Create the required environment file .env (Sample could be copied over from .env.sample)
     2. Run 'docker compose up --build' and the dashboard will open in http://localhost:8501
 
