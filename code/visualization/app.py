@@ -503,7 +503,8 @@ with tab1:
             value=f"€{basket_prices['Price'].mean():.2f}"
         )
 
-    st.subheader("Market share and basket prices")
+    st.subheader("Basket prices per supermarket")
+
 
 # Combine the supermarket data with basket prices
     comparison = basket_prices.merge(
@@ -519,17 +520,15 @@ with tab1:
         color="SupermarketName",
         hover_name="SupermarketName",
         labels={
-            "MarketShare": "Market share (%)",
             "Price": "Basket price (€)"
         },
-        title="Market share compared to essential basket price"
+        title="Basket price per supermarket"
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
     st.write(
-        "This chart shows whether supermarkets with a "
-        "larger market share have higher or lower basket prices."
+        "This chart shows the average price of the essential basket in each supermarket."
     )
 
 # PRICES TAB
@@ -705,11 +704,14 @@ with tab3:
             labels={
             "Date": "Year",
             "CPI": "Consumer Price Index (CPI)"
-            }
+            },
+            line_shape='spline'
         )
+        CPI_Line.update_traces(line_smoothing=0.75)  # Adjust smoothing factor
         st.plotly_chart(CPI_Line, use_container_width=True)
 
     with col2:
+        # Display the CPI Yearly Rate of Change with a smoothed line
         CPI_Yearly_Rate = px.line(
             economyStatistics,
             x="Date",
@@ -719,8 +721,10 @@ with tab3:
             labels={
                 "Date": "Year",
                 "CPIYearlyRateOfChange": "Monthly Rate of Change in CPI"
-            }
+            },
+            line_shape='spline'
         )
+        CPI_Yearly_Rate.update_traces(line_smoothing=0.75)  # Adjust smoothing factor
         st.plotly_chart(CPI_Yearly_Rate, use_container_width=True)
 
     income_cpi_increase_compare = make_subplots(specs=[[{"secondary_y": True}]])
@@ -732,7 +736,7 @@ with tab3:
             name="CPI Yearly Rate of Change",
             line={
             'shape': 'spline',
-            'smoothing': 1.0,  # Range is from 0 to 1.3
+            'smoothing': 0.75,  # Range is from 0 to 1.3
         }),
         secondary_y=False
         )
@@ -747,9 +751,9 @@ with tab3:
         secondary_y=True
     )
     income_cpi_increase_compare.update_layout(
-        title="CPI Yearly Rate of Change vs Average Disposable Income",
+        title="CPI Monthly Rate of Change vs Average Disposable Income",
         xaxis_title="Date",
-        yaxis_title="CPI Yearly Rate of Change (%)",
+        yaxis_title="CPI Monthly Rate of Change (%)",
         yaxis2_title="Average Disposable Income (€)",
         legend=dict(x=0.01, y=1.5, bordercolor="Black", borderwidth=1)
     )
