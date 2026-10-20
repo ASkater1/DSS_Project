@@ -79,6 +79,17 @@ prices = prices.merge(
     on="ProductID"
 )
 
+avgIncome2025 = 3875*12
+economyStatistics = pd.DataFrame({
+    "Date": ["2025_jan", "2025_feb", "2025_mar", "2025_apr", "2025_may", "2025_jun", "2025_jul", "2025_aug", "2025_sep", "2025_oct", "2025_nov", "2025_dec"], 
+        "CPI" : [141.83, 143.49, 143.50, 143.81, 144.96, 145.67, 146.72, 146.16, 145.62, 145.28, 145.11, 145.60], 
+        "CPIYearlyRateOfChange": [0.6, 1.2, 0.0, 0.2, 0.8, 0.5, 0.7, -0.4, -0.4, -0.2, -0.1, 0.3],
+        "IncomePartHousehold": [0.3, 0.29, 0.28, 0.27, 0.26, 0.25, 0.24, 0.23, 0.22, 0.21, 0.2, 0.19],
+        "AverageDisposableIncome": [avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025],
+        "AverageStandardizedIncome": [55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600],
+        "YearlyWageIncrease": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    })
+
 # Create dummy municipality data for supermarket accessibility
 # Includes population, distance to closest supermarket and supermarkets within 1, 3 and 5 km
 #municipalities = pd.DataFrame({
@@ -700,7 +711,7 @@ with tab3:
 
     with col2:
         CPI_Yearly_Rate = px.line(
-            economy,
+            economyStatistics,
             x="Date",
             y="CPIYearlyRateOfChange",
             markers=True,
@@ -715,8 +726,8 @@ with tab3:
     income_cpi_increase_compare = make_subplots(specs=[[{"secondary_y": True}]])
     income_cpi_increase_compare.add_trace(
         go.Scatter(
-            x=economy["Date"],
-            y=economy["CPIYearlyRateOfChange"],
+            x=economyStatistics["Date"],
+            y=economyStatistics["CPIYearlyRateOfChange"],
             mode="lines+markers",
             name="CPI Yearly Rate of Change",
             line={
@@ -728,8 +739,8 @@ with tab3:
     
     income_cpi_increase_compare.add_trace(
         go.Scatter(
-            x=economy["Date"],
-            y=economy["AverageDisposableIncome"],
+            x=economyStatistics["Date"],
+            y=economyStatistics["AverageDisposableIncome"],
             mode="lines",
             name="Average Disposable Income"
         ),
