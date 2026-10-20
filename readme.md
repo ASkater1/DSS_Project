@@ -1,4 +1,5 @@
-INFODSS Dashboard Group X
+# INFODSS Dashboard Group 4 - Food availability dashboard
+## by:
 - Jari van Polen
 - Matthijs van Oord
 - Tobias Buiten
@@ -6,6 +7,7 @@ INFODSS Dashboard Group X
 - Marc Avila Pedemonte
 - Floris Smit
 
+# Architecture of the Dashboard
 The Dashboard application is divided into multiple "services"/containers with each having a specific task to focus on.
 Some services like the data base can just be reused from publicly available images. Other services (Sub-Processes) are programmed by our group and their source code is in a sub-folder of the code directory, which contains all the data to run 
  * requirements.txt for a list of python librarys required during the actual run of the container.
@@ -25,7 +27,8 @@ Some services like the data base can just be reused from publicly available imag
 2. Once running you can access your dashboard via http://localhost:8501
 >*The Development instance is configured in a Way, that allows it to rebuild/restart each container where a source code change was detected. You will need to keep the terminal running and can follow the log to see if your change was actually detected and the container rebuild.*
 
-### Configuring the setup
+### Configuring the setup 
+#### (optional with make installed!)
 1. Run *make .env* to recreate a Environment variable set with the default values
 2. Edit the .env file to your liking, if you dont want default password/user setups.
 
