@@ -1,43 +1,29 @@
 name: dss_dashboard_supermarkets
 
 services:
-  #dashboard_supermarkets:
-  #  container_name: dashboard_supermarkets
-  #  build: .
-  #  volumes:
-  #    - /etc/localtime:/etc/localtime:ro
+  #static_importer:
+  #  container_name: static
+  #  build: ./code/importer/static/
   #  env_file:
   #    - .env
-  #  ports:
-  #    - '8501:8501'
+  #  develop:
+  #    watch:
+  #      - action: sync+restart
+  #        path: ./code/visualization/
+  #        target: /app
+  #        ignore:
+  #          - requirements.txt
+  #          - "*.md"
+  #          - Dockerfile
+  #      - action: rebuild
+  #        path: ./code/visualization/
+  #        ignore:
+  #          - "*.md"
+  #          - "*.py"
   #  depends_on:
-  #    - database
-  #  restart: always
-  #  healthcheck:
-  #    disable: true
-  static_importer:
-    container_name: static
-    build: ./code/importer/static/
-    env_file:
-      - .env
-    develop:
-      watch:
-        - action: sync+restart
-          path: ./code/visualization/
-          target: /app
-          ignore:
-            - requirements.txt
-            - "*.md"
-            - Dockerfile
-        - action: rebuild
-          path: ./code/visualization/
-          ignore:
-            - "*.md"
-            - "*.py"
-    depends_on:
-      database:
-        condition: service_healthy
-    restart: no
+  #    database:
+  #      condition: service_healthy
+  #  restart: no
   visualization:
     container_name: dashboard
     build: ./code/visualization/
