@@ -1,40 +1,54 @@
-# Variables
+# Detect Operating System
+ifdef OS
+    PYTHON := python
+    BIN_DIR := Scripts
+    RM := rmdir /s /q
+    CP := copy /y
+else
+    PYTHON := python3
+    BIN_DIR := bin
+    RM := rm -rf
+    CP := cp
+endif
+export SPHINXBUILD   = ../.venv/builder/$(BIN_DIR)/sphinx-build
 
 help:
 	@echo "Please use 'make <target>' where <target> is one of:"
-	@echo "   clean               Remove all artifacts, including running containers and dangling volumes"
-	@echo "   black               Reformat the whole source code."
-	@echo "   deploy              Deploy the whole dashboard, incl. database, importers etc."
-	@echo "   develop             Create a deployment, which automatically rebuilds and restarts a container once the source files have been edited."
-	@echo "   .env                Set up the environment variables needed for the docker compose / containers themself."
-	@echo "   dummy               Do nothing"
+	@echo " clean          Remove all artifacts, including running containers and dangling volumes"
+	@echo " black          Reformat the whole source code."
+	@echo " deploy         Deploy the whole dashboard, incl. database, importers etc."
+	@echo " develop        Create a deployment, which automatically rebuilds and restarts a container once the source files have been edited."
+	@echo " documentation  Rebuild the documentation for the Project."
+	@echo " .env           Set up the environment variables needed for the docker compose / containers themself."
+	@echo " dummy          Do nothing"
 
-
-# Clean everything up after deployment
-clean 0:
+clean 0: 
 	docker compose down -v
+	-$(MAKE) -C ./documentation clean
+	-$(RM) .venv
 
-black: .venv/builder
-	. .venv/builder/bin/activate && \
-		black ./code/
+black: .venv/builder/$(BIN_DIR)/activate
+	.venv/builder/$(BIN_DIR)/black ./code/
 
-deploy: .env black
-	docker compose up --build
-	#--abort-on-container-failure 
+deploy: .env
+	docker compose up
 
 develop d: .env
 	docker compose up --build -w
 
+documentation docu: .env .venv/builder/$(BIN_DIR)/activate
+	$(MAKE) -C ./documentation singlehtml
+
 dummy:
 	@echo "I don't want to do anything today!"
-	
+
 .env: .env.sample
 	@echo "The environment variables in the .env file have been set to the default values."
 	@echo "You may want to change them according to your requirements."
-	cp .env.sample .env
+	-$(CP) .env.sample .env
 
-.venv/builder:
-	-rm -rf .venv/builder
-	python3 -m venv ./.venv/builder
-	. .venv/builder/bin/activate && \
-		pip install -U pip
+.venv/builder/$(BIN_DIR)/activate venv:
+	-$(RM) .venv
+	$(PYTHON) -m venv ./.venv/builder
+	.venv/builder/$(BIN_DIR)/python -m pip install -U pip
+	.venv/builder/$(BIN_DIR)/pip install -r code/builder/requirements.txt

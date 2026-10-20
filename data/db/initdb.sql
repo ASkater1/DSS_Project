@@ -17,8 +17,8 @@ CREATE TABLE Products (
 );
 
 CREATE TABLE SupermarketsProducts (
-  supermarketId SERIAL REFERENCES Supermarket(supermarketId),
-  productId BIGSERIAL REFERENCES Product(productId),
+  supermarketId SERIAL REFERENCES Supermarkets(supermarketId),
+  productId BIGSERIAL REFERENCES Products(productId),
   date DATE NOT NULL,
   price DECIMAL(10,2),
   PRIMARY KEY (supermarketId, productId)
@@ -35,7 +35,7 @@ CREATE TABLE Municipalities (
   supermarketsWithin5KM INTEGER
 );
 
-CREATE TABLE Economy (
+CREATE TABLE EconomyStatistics (
   date DATE PRIMARY KEY,
   CPI DECIMAL(5,2),
   CPIYearlyRateOfChange DECIMAL(4,1),
