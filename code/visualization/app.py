@@ -3,31 +3,9 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import requests
-
-st.subheader("Database connection")
-host = os.environ.get("DB_HOST", "not set")
-st.write(f"DB_HOST is: {host}")
-
-try:
-    import psycopg2
-    conn = psycopg2.connect(
-        host=os.environ.get("DB_HOST", "localhost"),
-        port=5432,
-        dbname=os.environ.get("DB_NAME", "dss"),
-        user=os.environ.get("DB_USER", "dss"),
-        password=os.environ.get("DB_PASSWORD", ""),
-        connect_timeout=3,
-    )
-    cur = conn.cursor()
-    cur.execute("SELECT version();")
-    st.success(f"Connected. PostgreSQL says: {cur.fetchone()[0][:40]}...")
-    conn.close()
-except Exception as e:
-    st.error(f"Not connected: {type(e).__name__}: {e}")
-
-#Below is code for the assignment 0.2 prototype dashboard. The DB connection is only used to check whether the connection still works.
-#This should be removed when working on the actual prototype dashboard. All code here is placeholder
 
 # Create dummy data based on the ER diagram
 # This will later be replaced with data from our database
@@ -93,14 +71,24 @@ supermarket_product = pd.DataFrame(price_rows)
 prices = supermarket_product.merge(
     supermarkets[["SupermarketID", "Name"]],
     on="SupermarketID"
-)
+    )
 
 prices = prices.rename(columns={"Name": "SupermarketName"})
-
 prices = prices.merge(
     products,
     on="ProductID"
 )
+
+avgIncome2025 = 3875*12
+economyStatistics = pd.DataFrame({
+    "Date": ["2025_jan", "2025_feb", "2025_mar", "2025_apr", "2025_may", "2025_jun", "2025_jul", "2025_aug", "2025_sep", "2025_oct", "2025_nov", "2025_dec"], 
+        "CPI" : [141.83, 143.49, 143.50, 143.81, 144.96, 145.67, 146.72, 146.16, 145.62, 145.28, 145.11, 145.60], 
+        "CPIYearlyRateOfChange": [0.6, 1.2, 0.0, 0.2, 0.8, 0.5, 0.7, -0.4, -0.4, -0.2, -0.1, 0.3],
+        "IncomePartHousehold": [0.3, 0.29, 0.28, 0.27, 0.26, 0.25, 0.24, 0.23, 0.22, 0.21, 0.2, 0.19],
+        "AverageDisposableIncome": [avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025],
+        "AverageStandardizedIncome": [55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600],
+        "YearlyWageIncrease": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    })
 
 # Create dummy municipality data for supermarket accessibility
 # Includes population, distance to closest supermarket and supermarkets within 1, 3 and 5 km
@@ -467,9 +455,10 @@ except Exception as e:
 st.title("Food Security Dashboard")
 st.write("Monitoring supermarket affordability and accessibility in the Netherlands")
 
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4= st.tabs([
     "Overview",
     "Prices",
+    "Economy",
     "Municipalities"
 ])
 
@@ -525,7 +514,7 @@ with tab1:
 
     fig = px.bar(
         comparison,
-        x="MarketShare",
+        x="SupermarketName",
         y="Price",
         color="SupermarketName",
         hover_name="SupermarketName",
@@ -703,6 +692,70 @@ with tab2:
 # Shows supermarket accessibility in different Dutch municipalities
 
 with tab3:
+    st.header("Citizen Economy")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        CPI_Line = px.line(
+            economyStatistics,
+            x="Date",
+            y="CPI",
+            markers=True,
+            title="Consumer Price Index (CPI)",
+            labels={
+            "Date": "Year",
+            "CPI": "Consumer Price Index (CPI)"
+            }
+        )
+        st.plotly_chart(CPI_Line, use_container_width=True)
+
+    with col2:
+        CPI_Yearly_Rate = px.line(
+            economyStatistics,
+            x="Date",
+            y="CPIYearlyRateOfChange",
+            markers=True,
+            title="Monthly Rate of Change in CPI",
+            labels={
+                "Date": "Year",
+                "CPIYearlyRateOfChange": "Monthly Rate of Change in CPI"
+            }
+        )
+        st.plotly_chart(CPI_Yearly_Rate, use_container_width=True)
+
+    income_cpi_increase_compare = make_subplots(specs=[[{"secondary_y": True}]])
+    income_cpi_increase_compare.add_trace(
+        go.Scatter(
+            x=economyStatistics["Date"],
+            y=economyStatistics["CPIYearlyRateOfChange"],
+            mode="lines+markers",
+            name="CPI Yearly Rate of Change",
+            line={
+            'shape': 'spline',
+            'smoothing': 1.0,  # Range is from 0 to 1.3
+        }),
+        secondary_y=False
+        )
+    
+    income_cpi_increase_compare.add_trace(
+        go.Scatter(
+            x=economyStatistics["Date"],
+            y=economyStatistics["AverageDisposableIncome"],
+            mode="lines",
+            name="Average Disposable Income"
+        ),
+        secondary_y=True
+    )
+    income_cpi_increase_compare.update_layout(
+        title="CPI Yearly Rate of Change vs Average Disposable Income",
+        xaxis_title="Date",
+        yaxis_title="CPI Yearly Rate of Change (%)",
+        yaxis2_title="Average Disposable Income (€)",
+        legend=dict(x=0.01, y=1.5, bordercolor="Black", borderwidth=1)
+    )
+    st.plotly_chart(income_cpi_increase_compare, use_container_width=True)
+
+with tab4:
 
     st.header("Supermarket Accessibility")
 

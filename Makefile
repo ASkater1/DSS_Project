@@ -19,7 +19,8 @@ black: .venv/builder
 		black ./code/
 
 deploy: .env black
-	docker compose up --build --abort-on-container-failure 
+	docker compose up --build
+	#--abort-on-container-failure 
 
 develop d: .env
 	docker compose up --build -w
