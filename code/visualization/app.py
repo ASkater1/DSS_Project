@@ -697,7 +697,7 @@ with tab3:
     col1, col2 = st.columns(2)
     with col1:
         CPI_Line = px.line(
-            economy,
+            economyStatistics,
             x="Date",
             y="CPI",
             markers=True,
