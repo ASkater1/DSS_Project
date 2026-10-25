@@ -31,6 +31,7 @@ black: .venv/builder/$(BIN_DIR)/activate
 	.venv/builder/$(BIN_DIR)/black ./code/
 
 deploy: .env
+	-docker compose down -v
 	docker compose up
 
 develop d: .env
