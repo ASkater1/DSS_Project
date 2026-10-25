@@ -2,13 +2,13 @@
 -- To apply any changes first delete the database.
 
 CREATE TABLE Supermarkets (
-  supermarketId SERIAL PRIMARY KEY,
+  supermarketId INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
   marketshare NUMERIC(3,2)
 );
 
 CREATE TABLE Products (
-  productId BIGSERIAL PRIMARY KEY,
+  productId TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   isBasketProduct BOOLEAN,
   brand TEXT NOT NULL,
@@ -17,11 +17,11 @@ CREATE TABLE Products (
 );
 
 CREATE TABLE SupermarketsProducts (
-  supermarketId SERIAL REFERENCES Supermarkets(supermarketId),
-  productId BIGSERIAL REFERENCES Products(productId),
+  supermarketId INTEGER REFERENCES Supermarkets(supermarketId),
+  productId TEXT REFERENCES Products(productId),
   date DATE NOT NULL,
   price DECIMAL(10,2),
-  PRIMARY KEY (supermarketId, productId)
+  PRIMARY KEY (supermarketId, productId, date)
 );
 
 CREATE TABLE Municipalities (

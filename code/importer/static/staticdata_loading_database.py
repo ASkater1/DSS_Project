@@ -9,12 +9,13 @@ from sqlalchemy import create_engine
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from sqlalchemy import text
 
 
 
 
 
-# Get the project root directory from this script
+# Get the project root directory from this script (using environment variable so inside docker it will be able to get the route)
 PROJECT_DIR = Path(__file__).resolve().parents[3]
 
 # Folder containing the data
@@ -23,8 +24,6 @@ INPUT_DATA_DIR = PROJECT_DIR / "data" / "raw"
 # Folder containing the cleaned and processed data
 OUTPUT_DATA_DIR = PROJECT_DIR / "data" / "processed" 
 
-# Name of the table where to insert the data in the PostgreSQL Database
-table_name = "name_of_the_table"  # still need to put the final name whenever is created
 
 # Parameter to define the amount of instances to divide the processing of the dataframes
 chunksize = 250
@@ -83,7 +82,7 @@ supermarket_ids = {"AH": 1, "Jumbo": 2, "Lidl": 3, "Plus": 4}
 # Function to read the csv files in chunks
 def reader_supermarket(supermarket: str, chunksize: int = 250):
     # Return an iterator that reads the CSV chunk by chunk
-    return pd.read_csv(INPUT_DATA_DIR / f"{supermarket}.csv", chunksize=chunksize) 
+    return pd.read_csv(INPUT_DATA_DIR / f"{supermarket}.csv", chunksize=chunksize, dtype = {"prod_id": str}) 
 
 
 
@@ -180,26 +179,82 @@ def check_data_quality(df_clean: pd.DataFrame):
 
 
 
+# Function to prepare the three DataFrames matching the database tables
+def prepare_database_tables(df_clean: pd.DataFrame):
+
+    # Keeping only rows with the mandatory product information.
+    df = df_clean.dropna(subset = ["Product_ID", "Product_Name", "Brand_Product", "Product_Category"]).copy()
+
+    # Original supermarket IDs may contain letters or numbers: keep them as text.
+    df["Product_ID"] = df["Product_ID"].astype(str).str.strip()
+    df = df[df["Product_ID"] != ""]
+
+    # SUPERMARKET 
+    # Keeping the unique registers of supermarkets
+    df_supermarkets = df[["Supermarket_ID", "Supermarket"]].drop_duplicates().rename(
+        columns={"Supermarket_ID": "supermarketid", "Supermarket": "name"}
+    )
+    # Creating the marketshare feature (marketshare is not available in the CSV)
+    df_supermarkets["marketshare"] = None
+
+
+    # PRODUCTS
+    # Keeping the unique registers of products
+    df_products = df[["Product_ID", "Product_Name", "Brand_Product", "Product_Category"]].drop_duplicates(
+        subset=["Product_ID"]
+    ).rename(columns={
+        "Product_ID": "productid",
+        "Product_Name": "name",
+        "Brand_Product": "brand",
+        "Product_Category": "category"
+    })
+    df_products["isbasketproduct"] = None
+    df_products["description"] = None
+    df_products = df_products[["productid", "name", "isbasketproduct", "brand", "category", "description"]]
+
+
+    # PRICES
+    df_prices = df[["Supermarket_ID", "Product_ID", "Date", "Price"]].rename(columns={
+        "Supermarket_ID": "supermarketid",
+        "Product_ID": "productid",
+        "Date": "date",
+        "Price": "price"
+    })
+    df_prices = df_prices.drop_duplicates(subset=["supermarketid", "productid", "date"])
+    df_prices["date"] = df_prices["date"].dt.date
+
+    return df_supermarkets, df_products, df_prices
+
+
+
+
 
 
 # Main execution
 if __name__ == "__main__":
 
-    # # Reading the .env file and loading the variables into the python environment
-    # load_dotenv(PROJECT_DIR / ".env")
+    # Reading the .env file and loading the variables into the python environment
+    load_dotenv(PROJECT_DIR / ".env")
 
-    # # Read database connection settings
-    # db_host = os.environ["DB_HOST"] # "localhost"  
-    # db_name = os.environ["DB_NAME"] # this command allows python to access env variables that are loaded
-    # db_user = os.environ["DB_USER"]
-    # db_password = os.environ["DB_PASSWORD"]
+    # Read database connection settings
+    db_host = os.environ["DB_HOST"] # "localhost"  
+    db_name = os.environ["DB_NAME"] # this command allows python to access env variables that are loaded
+    db_user = os.environ["DB_USER"]
+    db_password = os.environ["DB_PASSWORD"]
 
-    # # Opening a connection to the PostgreSQL database 
-    # db_conn = create_engine(f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:5432/{db_name}")
+    # Opening a connection to the PostgreSQL database 
+    db_conn = create_engine(f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:5432/{db_name}")
 
-    # # Clear the existing static data before starting a new load
-    # with db_conn.begin() as conn:
-    #     conn.exec_driver_sql(f"TRUNCATE TABLE {table_name};")
+    # SECURITY CHECK! Prevent running the static importer twice, to avoid creating duplicate data imports in the database
+    with db_conn.connect() as conn:
+        result = conn.execute(text("SELECT COUNT(*) FROM supermarkets"))
+        if result.scalar() > 0:
+            print("Static supermarket data already loaded. Import cancelled.")
+            exit()
+    
+    # Remembering product IDs inserted during this execution (to keep track of unique products for the product table)
+    inserted_product_ids = set()
+    
 
     # Testing the reading and transformation of supermarket data
     for supermarket in supermarkets:
@@ -218,15 +273,48 @@ if __name__ == "__main__":
             # Optional: get an idea of the data-quality of the df (comment if not wanted)
             check_data_quality(df_clean)
 
-            # Inserting the cleaned dataframes to the PostgreSQL table
-            # df_clean.to_sql(name = table_name, con = db_conn, if_exists = "append", index = False, chunksize = inserting_chunksize)
+            
+            # Prepare separate DataFrames for the three database tables.
+            df_supermarkets, df_products, df_prices = prepare_database_tables(df_clean)
 
+            # Keep only products that have not been inserted yet
+            df_products = df_products[~df_products["productid"].isin(inserted_product_ids)]
 
-            # Only test the first two chunks of each supermarket
-            if chunk_number == 2:
-                break
+            # Inserting all data for the current chunk in one transaction
+            with db_conn.begin() as conn:
+            
+                # Insert supermarket data to supermarket table only in the first chunk of each supermarket
+                if chunk_number == 1:
+                    df_supermarkets.to_sql(
+                        name="supermarkets",
+                        con=conn,
+                        if_exists="append",
+                        index=False
+                    )
 
+            
 
-# To make quick test: Read the table into a pandas data-frame
-# mytable = pd.read_sql(f"SELECT * FROM {table_name};", db_conn)
-# print(mytable)
+                df_products.to_sql(
+                    name="products",
+                    con=conn,
+                    if_exists="append",
+                    index=False,
+                    chunksize=inserting_chunksize
+                )
+
+                df_prices.to_sql(
+                    name="supermarketsproducts",
+                    con=conn,
+                    if_exists="append",
+                    index=False,
+                    chunksize=inserting_chunksize
+                )
+
+            # Update the set to keep track of unique products after successful insertion
+            inserted_product_ids.update(df_products["productid"])
+
+            print(f"Chunk {chunk_number} inserted successfully.")
+
+            # # Only test the first two chunks of each supermarket
+            # if chunk_number == 2:
+            #     break
