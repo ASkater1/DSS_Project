@@ -103,8 +103,8 @@ The complete import can take a considerable amount of time, depending on compute
 
 The static data loader is intended to run once on an initially empty database.
  
-If it does, the import is cancelled with the following message:
- ""
+If it isn't started on an empty database, the import is cancelled with the following message:
+ "Static supermarket data already loaded. Import cancelled."
 This prevents accidental repeated imports into an already populated database.
  
-Important: The importer does not delete or replace existing database data. The PostgreSQL database is stored in a persistent Docker volume. Avoid running docker compose down -v unless you intentionally want to delete the database and all data stored in its volume.
+Important: The importer currently does not delete or replace existing database data. The PostgreSQL database is stored in a persistent Docker volume. Avoid running docker compose down -v unless you intentionally want to delete the database and all data stored in its volume.

@@ -9,11 +9,23 @@ services:
       - .env
     volumes:
       - ./data/raw:/project/data/raw:ro
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./code/visualization/
+          target: /app
+          ignore:
+            - requirements.txt
+            - "*.md"
+            - Dockerfile
+        - action: rebuild
+          path: ./code/visualization/
+          ignore:
+            - "*.md"
+            - "*.py"
     depends_on:
       database:
         condition: service_healthy
-    profiles:
-      - import
     restart: "no"
 
   visualization:
@@ -38,6 +50,8 @@ services:
     depends_on:
       database:
         condition: service_healthy
+      static_importer:
+        condition: service_completed_successfully
     ports:
       - '8501:8501'
     restart: always
