@@ -81,6 +81,7 @@ supermarket_ids = {"AH": 1, "Jumbo": 2, "Lidl": 3, "Plus": 4}
 
 # Function to read the csv files in chunks
 def reader_supermarket(supermarket: str, chunksize: int = 250):
+    print(f"Reading {supermarket}.CSV data in chunks of {chunksize} rows...")
     # Return an iterator that reads the CSV chunk by chunk
     return pd.read_csv(INPUT_DATA_DIR / f"{supermarket}.csv", chunksize=chunksize, dtype = {"prod_id": str}) 
 
@@ -237,19 +238,25 @@ if __name__ == "__main__":
     load_dotenv(PROJECT_DIR / ".env")
 
     # Read database connection settings
-    db_host = os.environ["DB_HOST"] # "localhost"  
-    db_name = os.environ["DB_NAME"] # this command allows python to access env variables that are loaded
-    db_user = os.environ["DB_USER"]
-    db_password = os.environ["DB_PASSWORD"]
+    db_host = os.environ["DB_HOST"] if "DB_HOST" in os.environ else exit("DB_HOST environment variable not set. Please set it in the .env file.")
+    db_name = os.environ["DB_NAME"] if "DB_NAME" in os.environ else exit("DB_NAME environment variable not set. Please set it in the .env file.")
+    db_user = os.environ["DB_USER"] if "DB_USER" in os.environ else exit("DB_USER environment variable not set. Please set it in the .env file.")
+    db_password = os.environ["DB_PASSWORD"] if "DB_PASSWORD" in os.environ else exit("DB_PASSWORD environment variable not set. Please set it in the .env file.")
+    chunksize = int(os.environ["STATIC_IMPORTER_CHUNKSIZE_INTERNAL"]) if "STATIC_IMPORTER_CHUNKSIZE_INTERNAL" in os.environ else chunksize
+    inserting_chunksize = int(os.environ["STATIC_IMPORTER_INSERTING_CHUNKSIZE"]) if "STATIC_IMPORTER_INSERTING_CHUNKSIZE" in os.environ else inserting_chunksize
+    print(f"Using chunksize of {chunksize} for reading CSVs and inserting_chunksize of {inserting_chunksize} for inserting into the database.")
+
+
 
     # Opening a connection to the PostgreSQL database 
     db_conn = create_engine(f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:5432/{db_name}")
 
     # SECURITY CHECK! Prevent running the static importer twice, to avoid creating duplicate data imports in the database
     with db_conn.connect() as conn:
+        print("Checking if static supermarket data is already loaded in the database...")
         result = conn.execute(text("SELECT COUNT(*) FROM supermarkets"))
         if result.scalar() > 0:
-            print("Static supermarket data already loaded. Import cancelled.")
+            print("[WARNING] Static supermarket data already loaded. Import not performed.")
             exit()
     
     # Remembering product IDs inserted during this execution (to keep track of unique products for the product table)
