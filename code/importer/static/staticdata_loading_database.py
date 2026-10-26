@@ -258,6 +258,8 @@ if __name__ == "__main__":
         if result.scalar() > 0:
             print("[WARNING] Static supermarket data already loaded. Import not performed.")
             exit()
+        else:
+            print("Static supermarket data not found in the database. Proceeding with import...")
     
     # Remembering product IDs inserted during this execution (to keep track of unique products for the product table)
     inserted_product_ids = set()

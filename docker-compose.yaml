@@ -9,20 +9,21 @@ services:
       - .env
     volumes:
       - ./data/raw:/project/data/raw:ro
-    develop:
-      watch:
-        - action: sync+restart
-          path: ./code/visualization/
-          target: /app
-          ignore:
-            - requirements.txt
-            - "*.md"
-            - Dockerfile
-        - action: rebuild
-          path: ./code/visualization/
-          ignore:
-            - "*.md"
-            - "*.py"
+    # Currently disabled, as restarting the static importer will always result in compose failing to start.
+    #develop:
+    #  watch:
+    #    - action: sync+restart
+    #      path: ./code/importer/static/
+    #      target: /app
+    #      ignore:
+    #        - requirements.txt
+    #        - "*.md"
+    #        - Dockerfile
+    #    - action: rebuild
+    #      path: ./code/importer/static/
+    #      ignore:
+    #        - "*.md"
+    #        - "*.py"
     depends_on:
       database:
         condition: service_healthy
