@@ -1,29 +1,34 @@
 name: dss_dashboard_supermarkets
 
 services:
-  #static_importer:
-  #  container_name: static
-  #  build: ./code/importer/static/
-  #  env_file:
-  #    - .env
-  #  develop:
-  #    watch:
-  #      - action: sync+restart
-  #        path: ./code/visualization/
-  #        target: /app
-  #        ignore:
-  #          - requirements.txt
-  #          - "*.md"
-  #          - Dockerfile
-  #      - action: rebuild
-  #        path: ./code/visualization/
-  #        ignore:
-  #          - "*.md"
-  #          - "*.py"
-  #  depends_on:
-  #    database:
-  #      condition: service_healthy
-  #  restart: no
+
+  static_importer:
+    container_name: static
+    build: ./code/importer/static/  # where to find the Dockerfile to construct the image
+    env_file:
+      - .env
+    volumes:
+      - ./data/raw:/project/data/raw:ro
+    # Currently disabled, as restarting the static importer will always result in compose failing to start.
+    #develop:
+    #  watch:
+    #    - action: sync+restart
+    #      path: ./code/importer/static/
+    #      target: /app
+    #      ignore:
+    #        - requirements.txt
+    #        - "*.md"
+    #        - Dockerfile
+    #    - action: rebuild
+    #      path: ./code/importer/static/
+    #      ignore:
+    #        - "*.md"
+    #        - "*.py"
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: "no"
+
   visualization:
     container_name: dashboard
     build: ./code/visualization/
@@ -46,6 +51,8 @@ services:
     depends_on:
       database:
         condition: service_healthy
+      static_importer:
+        condition: service_completed_successfully
     ports:
       - '8501:8501'
     restart: always
