@@ -1,2 +1,5 @@
 black==26.10.1
 Sphinx==9.1.0
+sphinx-copybutton
+sphinx-autodoc-typehints
+myst-parser
