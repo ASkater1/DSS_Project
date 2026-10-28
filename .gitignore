@@ -1,1 +1,3 @@
 .env
+documentation/_build
+.vscode/

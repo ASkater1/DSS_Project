@@ -1,6 +1,6 @@
 # Detect Operating System
 ifdef OS
-    PYTHON := python
+    PYTHON := python3.15.exe
     BIN_DIR := Scripts
     RM := rmdir /s /q
     CP := copy /y
