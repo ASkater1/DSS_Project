@@ -13,6 +13,8 @@ CREATE TABLE Products (
   isBasketProduct BOOLEAN,
   brand TEXT NOT NULL,
   category TEXT NOT NULL,
+  weight NUMERIC(10,2),
+  unit NUMERIC(10,2),
   description TEXT
 );
 
