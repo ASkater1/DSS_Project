@@ -1,0 +1,3 @@
+Dear @MatthijsOord please first look at the readme and then replace the contents of the moddeling.py file.
+
+If you use the normal command for creating a development environment ( docker compose up --build -w ) you should be fine to run the script even without the container (running in container make development for you unnecessarily harder, see Marc)

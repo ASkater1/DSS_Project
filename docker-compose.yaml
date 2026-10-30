@@ -28,7 +28,50 @@ services:
       database:
         condition: service_healthy
     restart: "no"
-
+  modelling:
+    container_name: modelling
+    build: ./code/modelling/  # where to find the Dockerfile to construct the image
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USER: ${DB_USER}
+      DB_NAME: ${DB_NAME}
+      DB_HOST: ${DB_HOST}
+    depends_on:
+      database:
+        condition: service_healthy
+      static_importer:
+        condition: service_completed_successfully
+      live:
+        condition: service_completed_successfully
+    restart: "no"
+  basket:
+    container_name: basket
+    build: ./code/basket/  # where to find the Dockerfile to construct the image
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USER: ${DB_USER}
+      DB_NAME: ${DB_NAME}
+      DB_HOST: ${DB_HOST}
+    depends_on:
+      database:
+        condition: service_healthy
+      static_importer:
+        condition: service_completed_successfully
+      live:
+        condition: service_completed_successfully
+    restart: "no"
+  live:
+    container_name: live
+    build: ./code/importer/live  # where to find the Dockerfile to construct the image
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USER: ${DB_USER}
+      DB_NAME: ${DB_NAME}
+      DB_HOST: ${DB_HOST}
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: "no"
   visualization:
     container_name: dashboard
     build: ./code/visualization/
@@ -51,14 +94,14 @@ services:
     depends_on:
       database:
         condition: service_healthy
-      static_importer:
-        condition: service_completed_successfully
+      #static_importer:
+      #  condition: service_completed_successfully
     ports:
       - '8501:8501'
     restart: always
 
   database:
-    container_name: database
+    container_name: ${DB_HOST}
     image: postgres:16
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -69,6 +112,9 @@ services:
       - ./data/db/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql
       - db:/var/lib/postgresql/data
     restart: always
+    # temporary open database port to create manually mapping of basket.
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
