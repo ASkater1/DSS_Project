@@ -6,6 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
+import psycopg2
 
 # Create dummy data based on the ER diagram
 # This will later be replaced with data from our database
@@ -90,310 +91,55 @@ economyStatistics = pd.DataFrame({
         "YearlyWageIncrease": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     })
 
-# Create dummy municipality data for supermarket accessibility
-# Includes population, distance to closest supermarket and supermarkets within 1, 3 and 5 km
-#municipalities = pd.DataFrame({
-#    "MunicipalityID": list(range(1, 11)),
-#    "Name": [
-#        "Amsterdam", "Rotterdam", "Utrecht",
-#        "Den Haag", "Eindhoven", "Groningen",
-#        "Zeist", "Amersfoort", "Tilburg", "Maastricht"
-#    ],
-#    "Population": [
-#        920000, 670000, 370000, 570000, 245000,
-#        240000, 66000, 160000, 230000, 125000
-#    ],
-#    "Year": [2025] * 10,
-#    "DistanceClosestSupermarket": [
-#        0.3, 0.4, 0.2, 0.4, 0.5,
-#        0.6, 0.8, 0.5, 0.6, 0.7
-#    ],
-#    "SupermarketsWithin1KM": [
-#        20, 16, 12, 13, 8, 7, 3, 6, 7, 4
-#    ],
-#    "SupermarketsWithin3KM": [
-#        60, 45, 35, 40, 24, 20, 9, 18, 21, 13
-#    ],
-#    "SupermarketsWithin5KM": [
-#        100, 80, 60, 70, 43, 35, 16, 30, 36, 23
-#    ]
-#})
 
-
-# Load real municipality data from CBS
-# Sources:
-# 80305ned - Supermarket accessibility
-# 03759ned - Municipality population
-
-CBS_BASE_URL = "https://opendata.cbs.nl/ODataApi/OData"
-YEAR = 2025
-
-
-@st.cache_data(ttl=86400)
-def get_cbs_data(table, endpoint, params=None):
-    """Download paginated data from the CBS OData API."""
-    url = f"{CBS_BASE_URL}/{table}/{endpoint}"
-    all_rows = []
-
-    with requests.Session() as session:
-        while url:
-            response = session.get(
-                url,
-                params=params,
-                timeout=60
-            )
-            response.raise_for_status()
-
-            result = response.json()
-
-            all_rows.extend(result.get("value", []))
-
-            url = (
-                result.get("odata.nextLink")
-                or result.get("@odata.nextLink")
-            )
-            params = None
-
-    return pd.DataFrame(all_rows)
-
-
-def get_category_key(df, title):
-    """Find a CBS category key using its title."""
-    matches = df[
-        df["Title"].astype(str).str.strip().str.casefold()
-        == title.casefold()
+# Load municipality data inserted into PostgreSQL by the static municipality importer
+@st.cache_data(ttl=3600)
+def load_municipalities_from_database() -> pd.DataFrame:
+    required_variables = ["DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD"]
+    missing_variables = [
+        variable for variable in required_variables
+        if not os.environ.get(variable)
     ]
 
-    if matches.empty:
-        raise ValueError(f"CBS category not found: {title}")
-
-    return matches.iloc[0]["Key"]
-
-
-def get_period_key(table, year):
-    periods = get_cbs_data(table, "Perioden")
-
-    matches = periods[
-        periods["Title"].astype(str).str.strip()
-        .str.startswith(str(year))
-    ]
-
-    if matches.empty:
-        raise ValueError(
-            f"No data period for {year} in {table}"
+    if missing_variables:
+        raise RuntimeError(
+            "Missing database environment variables: "
+            + ", ".join(missing_variables)
         )
 
-    return matches.iloc[0]["Key"]
+    query = """
+        SELECT
+            municipalityid AS "MunicipalityID",
+            name AS "Name",
+            population AS "Population",
+            year AS "Year",
+            distanceclosestsupermarket AS "DistanceClosestSupermarket",
+            supermarketswithin1km AS "SupermarketsWithin1KM",
+            supermarketswithin3km AS "SupermarketsWithin3KM",
+            supermarketswithin5km AS "SupermarketsWithin5KM"
+        FROM municipalities
+        ORDER BY name
+    """
 
+    with psycopg2.connect(
+        host=os.environ["DB_HOST"],
+        port=5432,
+        dbname=os.environ["DB_NAME"],
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"]
+    ) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
 
-@st.cache_data(ttl=86400)
-def load_municipalities(year=2025):
+    municipalities = pd.DataFrame(rows, columns=columns)
 
-    # -----------------------------
-    # 1. Supermarket accessibility
-    # -----------------------------
-
-    table = "80305ned"
-
-    properties = get_cbs_data(
-        table, "DataProperties"
-    ).reset_index(drop=True)
-
-    titles = properties["Title"].fillna("").str.strip()
-
-    distance_rows = properties[
-        titles == "Afstand tot grote supermarkt"
-    ]
-
-    if distance_rows.empty:
-        raise ValueError(
-            "Supermarket distance field not found"
+    if municipalities.empty:
+        raise RuntimeError(
+            "No municipality data was found in the database. "
+            "Run staticdata_loading_database_municipalities.py first."
         )
-
-    distance_key = distance_rows.iloc[0]["Key"]
-
-    # Locate the three distance bands associated
-    # with 'Aantal grote supermarkten'
-    group_indexes = properties.index[
-        titles == "Aantal grote supermarkten"
-    ]
-
-    if len(group_indexes) == 0:
-        raise ValueError(
-            "Supermarket count group not found"
-        )
-
-    group_index = group_indexes[0]
-
-    bands = properties.iloc[
-        group_index + 1:group_index + 4
-    ]
-
-    expected = {
-        "Binnen 1 km": "SupermarketsWithin1KM",
-        "Binnen 3 km": "SupermarketsWithin3KM",
-        "Binnen 5 km": "SupermarketsWithin5KM"
-    }
-
-    band_columns = {}
-
-    for _, row in bands.iterrows():
-        title = row["Title"].strip()
-        if title in expected:
-            band_columns[row["Key"]] = expected[title]
-
-    if len(band_columns) != 3:
-        raise ValueError(
-            "Could not identify the 1, 3 and 5 km "
-            "supermarket fields in CBS metadata"
-        )
-
-    supermarket_columns = {
-        distance_key: "DistanceClosestSupermarket",
-        **band_columns
-    }
-
-    period = get_period_key(table, year)
-
-    supermarket_data = get_cbs_data(
-        table,
-        "TypedDataSet",
-        params={
-            "$filter": f"Perioden eq '{period}'",
-            "$select": ",".join([
-                "RegioS",
-                *supermarket_columns.keys()
-            ]),
-            "$top": 10000
-        }
-    )
-
-    supermarket_data = supermarket_data[
-        supermarket_data["RegioS"].str.startswith(
-            "GM", na=False
-        )
-    ].copy()
-
-    supermarket_data = supermarket_data.rename(
-        columns=supermarket_columns
-    )
-
-    # -----------------------------
-    # 2. Population
-    # -----------------------------
-
-    table = "03759ned"
-
-    properties = get_cbs_data(
-        table, "DataProperties"
-    )
-
-    population_key = get_category_key(
-        properties,
-        "Bevolking op 1 januari"
-    )
-
-    period = get_period_key(table, year)
-
-    dimensions = {
-        "Geslacht": "Totaal mannen en vrouwen",
-        "Leeftijd": "Totaal",
-        "BurgerlijkeStaat": "Totaal burgerlijke staat"
-    }
-
-    filters = [f"Perioden eq '{period}'"]
-
-    for dimension, title in dimensions.items():
-
-        categories = get_cbs_data(
-            table, dimension
-        )
-
-        key = get_category_key(categories, title)
-
-        filters.append(
-            f"{dimension} eq '{key}'"
-        )
-
-    population_data = get_cbs_data(
-        table,
-        "TypedDataSet",
-        params={
-            "$filter": " and ".join(filters),
-            "$select": f"RegioS,{population_key}",
-            "$top": 10000
-        }
-    )
-
-    population_data = population_data[
-        population_data["RegioS"].str.startswith(
-            "GM", na=False
-        )
-    ].copy()
-
-    population_data = population_data.rename(
-        columns={population_key: "Population"}
-    )
-
-    # -----------------------------
-    # 3. Municipality names
-    # -----------------------------
-
-    regions = get_cbs_data(
-        "80305ned", "RegioS"
-    )
-
-    regions = regions[
-        regions["Key"].str.startswith("GM", na=False)
-    ][["Key", "Title"]].copy()
-
-    regions = regions.rename(
-        columns={
-            "Key": "RegioS",
-            "Title": "Name"
-        }
-    )
-
-    regions["Name"] = regions["Name"].str.strip()
-
-    # -----------------------------
-    # 4. Combine the data
-    # -----------------------------
-
-    municipalities = supermarket_data.merge(
-        population_data[["RegioS", "Population"]],
-        on="RegioS",
-        how="left",
-        validate="one_to_one"
-    )
-
-    municipalities = municipalities.merge(
-        regions,
-        on="RegioS",
-        how="left",
-        validate="many_to_one"
-    )
-
-    municipalities["MunicipalityID"] = (
-        municipalities["RegioS"]
-        .str.replace("GM", "", regex=False)
-        .astype(int)
-    )
-
-    municipalities["Year"] = year
-
-    columns = [
-        "MunicipalityID",
-        "Name",
-        "Population",
-        "Year",
-        "DistanceClosestSupermarket",
-        "SupermarketsWithin1KM",
-        "SupermarketsWithin3KM",
-        "SupermarketsWithin5KM"
-    ]
-
-    municipalities = municipalities[columns].copy()
 
     numeric_columns = [
         "Population",
@@ -402,54 +148,27 @@ def load_municipalities(year=2025):
         "SupermarketsWithin3KM",
         "SupermarketsWithin5KM"
     ]
-
     for column in numeric_columns:
         municipalities[column] = pd.to_numeric(
-            municipalities[column],
-            errors="coerce"
+            municipalities[column], errors="coerce"
         )
 
-    return (
-        municipalities
-        .sort_values("Name")
-        .reset_index(drop=True)
-    )
+    # The importer stores an annual value as 1 January in the database DATE column
+    municipalities["Year"] = pd.to_datetime(
+        municipalities["Year"], errors="coerce"
+    ).dt.year.astype("Int64")
+
+    return municipalities
 
 
-# Load municipality data into the dashboard
 try:
-    municipalities = load_municipalities(YEAR)
-
-    # Clean municipality names for matching with PDOK
-    municipalities["Name"] = (
-        municipalities["Name"]
-        .str.strip()
-        .str.replace(r"\s*\(gemeente\)", "", regex=True, case=False)
-        .str.replace(r"\(([^()]*)\.\)", r"(\1)", regex=True)
-        .replace({
-            "Middelburg (Z)": "Middelburg",
-            "Laren (NH)": "Laren",
-            "Rijswijk (ZH)": "Rijswijk",
-            "Stein (L)": "Stein",
-            "Beek (L)": "Beek",
-        })
-    )
-
-    if municipalities.empty:
-        st.error("CBS returned no municipality data.")
-        st.stop()
-
-    st.success(
-        f"Loaded {len(municipalities)} municipalities "
-        f"from CBS ({YEAR})"
-    )
+    municipalities = load_municipalities_from_database()
 
 except Exception as e:
-    st.error(f"Could not load CBS data: {e}")
+    st.error(f"Could not load municipality data from the database: {e}")
     st.stop()
 
-
-# Create the dashboard with three tabs
+# Create the dashboard with four tabs
 # Each tab focuses on a different part of supermarket affordability or accessibility
 
 st.title("Food Security Dashboard")
