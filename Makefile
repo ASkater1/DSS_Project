@@ -1,6 +1,6 @@
 # Detect Operating System
 ifdef OS
-    PYTHON := python
+    PYTHON := python3.15.exe
     BIN_DIR := Scripts
     RM := rmdir /s /q
     CP := copy /y
@@ -14,8 +14,9 @@ export SPHINXBUILD   = ../.venv/builder/$(BIN_DIR)/sphinx-build
 
 help:
 	@echo "Please use 'make <target>' where <target> is one of:"
-	@echo " clean          Remove all artifacts, including running containers and dangling volumes"
 	@echo " black          Reformat the whole source code."
+	@echo " clean          Remove all artifacts, including running containers and dangling volumes"
+	@echo " cleancaches    Clean everything including all available caches."
 	@echo " deploy         Deploy the whole dashboard, incl. database, importers etc."
 	@echo " develop        Create a deployment, which automatically rebuilds and restarts a container once the source files have been edited."
 	@echo " documentation  Rebuild the documentation for the Project."
@@ -26,6 +27,9 @@ clean 0:
 	docker compose down -v
 	-$(MAKE) -C ./documentation clean
 	-$(RM) .venv
+
+cleancaches cc: 0
+	docker builder prune
 
 black: .venv/builder/$(BIN_DIR)/activate
 	.venv/builder/$(BIN_DIR)/black ./code/
