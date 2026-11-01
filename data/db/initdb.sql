@@ -13,7 +13,9 @@ CREATE TABLE Products (
   isBasketProduct BOOLEAN,
   brand TEXT NOT NULL,
   category TEXT NOT NULL,
-  description TEXT
+  description TEXT,
+  quantity_value NUMERIC,
+  quantity_units TEXT
 );
 
 CREATE TABLE SupermarketsProducts (

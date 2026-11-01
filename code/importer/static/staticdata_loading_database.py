@@ -201,17 +201,19 @@ def prepare_database_tables(df_clean: pd.DataFrame):
 
     # PRODUCTS
     # Keeping the unique registers of products
-    df_products = df[["Product_ID", "Product_Name", "Brand_Product", "Product_Category"]].drop_duplicates(
+    df_products = df[["Product_ID", "Product_Name", "Brand_Product", "Product_Category", "Quantity_Value_Product", "Quantity_Unit_Product"]].drop_duplicates(
         subset=["Product_ID"]
     ).rename(columns={
         "Product_ID": "productid",
         "Product_Name": "name",
         "Brand_Product": "brand",
-        "Product_Category": "category"
+        "Product_Category": "category",
+        "Quantity_Value_Product": "quantity_value",
+        "Quantity_Unit_Product": "quantity_units"
     })
     df_products["isbasketproduct"] = None
     df_products["description"] = None
-    df_products = df_products[["productid", "name", "isbasketproduct", "brand", "category", "description"]]
+    df_products = df_products[["productid", "name", "isbasketproduct", "brand", "category", "description", "quantity_value", "quantity_units"]]
 
 
     # PRICES
@@ -222,6 +224,22 @@ def prepare_database_tables(df_clean: pd.DataFrame):
         "Price": "price"
     })
     df_prices = df_prices.drop_duplicates(subset=["supermarketid", "productid", "date"])
+
+    # Implementation to only insert records of product, date and price when the price has changed for the same product in the same supermarket (to avoid inserting duplicate prices for the same product and date)
+    # Since the CSV files contain in each row a different product with all its dates and prices, we can implement this chunk by chunk since a single product will not be split across different chunks. So, we can sort the prices chronologically for each product and then keep only the first price and subsequent price changes.
+    # Sort prices chronologically for each product
+    df_prices = df_prices.sort_values(
+        by=["supermarketid", "productid", "date"]
+    )
+
+    # Get the previous price for each product in the same supermarket
+    previous_price = df_prices.groupby(
+        ["supermarketid", "productid"]
+    )["price"].shift(1)
+
+    # Keep the first price and only subsequent price changes
+    df_prices = df_prices[df_prices["price"] != previous_price]
+
     df_prices["date"] = df_prices["date"].dt.date
 
     return df_supermarkets, df_products, df_prices
@@ -322,7 +340,7 @@ if __name__ == "__main__":
             # Update the set to keep track of unique products after successful insertion
             inserted_product_ids.update(df_products["productid"])
 
-            print(f"Chunk {chunk_number} inserted successfully.")
+            print(f"[{supermarket}] Chunk {chunk_number} inserted successfully. ")
 
             # # Only test the first two chunks of each supermarket
             # if chunk_number == 2:
