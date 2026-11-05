@@ -41,12 +41,12 @@ The year and insertion size can optionally be overridden through environment var
 
 ## Dependencies
 
-The required Python packages are listed in `code/importer/static/requirements.txt`.
+The required Python packages are listed in `requirements.txt`.
 
 For local execution, install them from the project root using:
 
 ```text
-python -m pip install -r code/importer/static/requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 The CBS request itself uses Python's standard library, so no additional HTTP package is required.
@@ -76,7 +76,7 @@ The data-quality report prints the number of rows, duplicate municipality IDs an
 From the project root, make sure PostgreSQL is running, the `Municipalities` table has been created from `data/db/initdb.sql`, and the `.env` file contains valid database settings. Then run:
 
 ```text
-python code/importer/static/staticdata_loading_database_municipalities.py
+python staticdata_loading_database_municipalities.py
 ```
 
 The machine must have internet access to the CBS API. The requested year must be available in both CBS datasets; otherwise, the importer stops with an explanatory error.
@@ -113,6 +113,6 @@ Run both importers from the project root with:
 docker compose run --rm --build static_importer
 ```
 
-The image contains both `staticdata_loading_database.py` and `staticdata_loading_database_municipalities.py`. Internet access is required during execution because the second script downloads data from the CBS API.
+The image contains both `staticdata_loading_database_municipalities.py`. Internet access is required during execution because the second script downloads data from the CBS API.
 
 The PostgreSQL database uses a persistent Docker volume. Avoid running `docker compose down -v` unless you intentionally want to delete the database and all data stored in its volume.

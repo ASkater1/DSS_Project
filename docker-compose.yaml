@@ -9,6 +9,9 @@ services:
       - .env
     volumes:
       - ./data/raw:/project/data/raw:ro
+    depends_on:
+      static_municipalities_importer:
+        condition: service_completed_successfully
     # Currently disabled, as restarting the static importer will always result in compose failing to start.
     #develop:
     #  watch:
@@ -24,6 +27,11 @@ services:
     #      ignore:
     #        - "*.md"
     #        - "*.py"
+  static_municipalities_importer:
+    container_name: static_municipalities_importer
+    build: ./code/importer/static_municipalities/  # where to find the Dockerfile to construct the image
+    env_file:
+      - .env
     depends_on:
       database:
         condition: service_healthy
@@ -40,6 +48,8 @@ services:
       database:
         condition: service_healthy
       static_importer:
+        condition: service_completed_successfully
+      static_municipalities_importer:
         condition: service_completed_successfully
       live:
         condition: service_completed_successfully
