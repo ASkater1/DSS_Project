@@ -1,4 +1,6 @@
+import json
 import os
+import time
 import pandas as pd
 import numpy as np
 import streamlit as st
@@ -527,11 +529,29 @@ with tab4:
         "?crs=http%3A%2F%2Fwww.opengis.net%2Fdef%2Fcrs%2FOGC%2F1.3%2FCRS84"
         "&f=json&limit=1000"
     )
-
+    cached_municipality_geojson = "municipalities.geojson"
     try:
-        response = requests.get(geojson_url, timeout=15)
-        response.raise_for_status()
-        geojson_data = response.json()
+        try:
+            if (os.path.exists(cached_municipality_geojson) and
+                os.path.getsize(cached_municipality_geojson) > 0 and
+                time.time() - os.path.getmtime(cached_municipality_geojson) < 60 * 60 * 24 * 30):
+                with open(cached_municipality_geojson, "r") as f:
+                    geojson_data = json.loads(f.read())
+            else: 
+                response = requests.get(geojson_url, timeout=15)
+                response.raise_for_status()
+                geojson_data = response.json()
+                # write the geojson data to a file
+                with open(cached_municipality_geojson, "w") as f:
+                    json.dump(geojson_data, f)
+        except requests.RequestException as e:
+            print("Warning: could not fetch live municipality geodata.")
+            geojson_data  = ""
+            # use static geojson data from the local file if the request fails
+            with open(cached_municipality_geojson, "r") as f:
+                geojson_data = json.loads(f.read())
+            raise
+
 
         fig = px.choropleth_mapbox(
             municipalities,

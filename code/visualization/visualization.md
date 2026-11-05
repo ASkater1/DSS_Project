@@ -11,6 +11,8 @@ pandas and numpy are currently included to form placeholder data using the .rand
 ## Expected folders:
 There are no expected files required for this Container to run, as it will receive all data points from the database itself.
 
+At build time there is a municipalities.geojson expected, which is just a cached version of the region data of every municipality which would otherwise be directly downloaded each time the website is opened.
+
 ## Expected environment variables:
 * DB_HOST
 * DB_NAME
