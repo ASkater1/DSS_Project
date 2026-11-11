@@ -38,11 +38,12 @@ CREATE TABLE Municipalities (
 );
 
 CREATE TABLE EconomyStatistics (
-  date DATE PRIMARY KEY,
-  CPI DECIMAL(5,2),
+  date DATE PRIMARY KEY,                    
+  CPI DECIMAL(5,2),                         
   CPIYearlyRateOfChange DECIMAL(4,1),
-  incomeParticularHousehold DECIMAL(10,1),
-  averageDisposableIncome DECIMAL(10,1),
-  averageStandardizedIncome DECIMAL(10,1),
-  yearlyWageIncrease DECIMAL(4,1)
+  CPIMonthlyRateOfChange DECIMAL(4,1),
+  averageGrossIncome DECIMAL(10,1),         
+  averageDisposableIncome DECIMAL(10,1),    
+  averageStandardizedIncome DECIMAL(10,1),  
+  yearlyWageIncrease DECIMAL(4,1)           
 );
