@@ -1,4 +1,4 @@
-#Required dependencies to execute the static loader 
+#Required dependencies to execute the economy statistics loader
 pandas
 psycopg2-binary==2.9.9
 SQLAlchemy
