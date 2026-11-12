@@ -8,166 +8,28 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
-import psycopg2
 
-# Create dummy data based on the ER diagram
-# This will later be replaced with data from our database
+import data_access as db
 
-# Supermarket names and their market shares
-
-supermarkets = pd.DataFrame({
-    "SupermarketID": [1, 2, 3, 4],
-    "Name": ["Albert Heijn", "Jumbo", "Lidl", "Plus"],
-    "Year": [2024, 2024, 2024, 2024],
-    "MarketShare": [37, 22, 11, 6]
-})
-
-# Product information including whether a product belongs to the essential basket
-
-products = pd.DataFrame({
-    "ProductID": [1, 2, 3, 4],
-    "Name": [
-        "Halfvolle melk 1L",
-        "Volkoren brood",
-        "Bananen 1kg",
-        "Verse franse friet 700g"
-    ],
-    "IsBasketProduct": [True, True, True, False],
-    "Brand": ["Huismerk", "Huismerk", "Huismerk", "AH"],
-    "Category": [
-        "Zuivel",
-        "Brood",
-        "Groente en fruit",
-        "Aardappelen"
-    ],
-    "Description": [
-        "Halfvolle melk",
-        "Volkoren brood",
-        "Verse bananen",
-        "Verse franse friet"
-    ]
-})
-
-# Create dummy prices for each supermarket and product
-# Prices increase slightly each month to simulate price changes over time
-price_rows = []
-
-for month in range(1, 7):
-    for supermarket_id in supermarkets["SupermarketID"]:
-        for product_id in products["ProductID"]:
-
-            price = 0.80 + product_id * 0.45
-            price += supermarket_id * 0.08
-            price += month * 0.03
-
-            price_rows.append({
-                "SupermarketID": supermarket_id,
-                "ProductID": product_id,
-                "Price": round(price, 2),
-                "Date": pd.Timestamp(2025, month, 1)
-            })
-
-supermarket_product = pd.DataFrame(price_rows)
-
-# Combine the supermarket and product data using their IDs
-# This makes it possible to compare product prices between supermarkets
-prices = supermarket_product.merge(
-    supermarkets[["SupermarketID", "Name"]],
-    on="SupermarketID"
-    )
-
-prices = prices.rename(columns={"Name": "SupermarketName"})
-prices = prices.merge(
-    products,
-    on="ProductID"
-)
-
-avgIncome2025 = 3875*12
-economyStatistics = pd.DataFrame({
-    "Date": ["2025_jan", "2025_feb", "2025_mar", "2025_apr", "2025_may", "2025_jun", "2025_jul", "2025_aug", "2025_sep", "2025_oct", "2025_nov", "2025_dec"], 
-        "CPI" : [141.83, 143.49, 143.50, 143.81, 144.96, 145.67, 146.72, 146.16, 145.62, 145.28, 145.11, 145.60], 
-        "CPIYearlyRateOfChange": [0.6, 1.2, 0.0, 0.2, 0.8, 0.5, 0.7, -0.4, -0.4, -0.2, -0.1, 0.3],
-        "IncomePartHousehold": [0.3, 0.29, 0.28, 0.27, 0.26, 0.25, 0.24, 0.23, 0.22, 0.21, 0.2, 0.19],
-        "AverageDisposableIncome": [avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025, avgIncome2025],
-        "AverageStandardizedIncome": [55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600, 55600],
-        "YearlyWageIncrease": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    })
-
-
-# Load municipality data inserted into PostgreSQL by the static municipality importer
-@st.cache_data(ttl=3600)
-def load_municipalities_from_database() -> pd.DataFrame:
-    required_variables = ["DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD"]
-    missing_variables = [
-        variable for variable in required_variables
-        if not os.environ.get(variable)
-    ]
-
-    if missing_variables:
-        raise RuntimeError(
-            "Missing database environment variables: "
-            + ", ".join(missing_variables)
-        )
-
-    query = """
-        SELECT
-            municipalityid AS "MunicipalityID",
-            name AS "Name",
-            population AS "Population",
-            year AS "Year",
-            distanceclosestsupermarket AS "DistanceClosestSupermarket",
-            supermarketswithin1km AS "SupermarketsWithin1KM",
-            supermarketswithin3km AS "SupermarketsWithin3KM",
-            supermarketswithin5km AS "SupermarketsWithin5KM"
-        FROM municipalities
-        ORDER BY name
-    """
-
-    with psycopg2.connect(
-        host=os.environ["DB_HOST"],
-        port=5432,
-        dbname=os.environ["DB_NAME"],
-        user=os.environ["DB_USER"],
-        password=os.environ["DB_PASSWORD"]
-    ) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(query)
-            rows = cursor.fetchall()
-            columns = [description[0] for description in cursor.description]
-
-    municipalities = pd.DataFrame(rows, columns=columns)
-
-    if municipalities.empty:
-        raise RuntimeError(
-            "No municipality data was found in the database. "
-            "Run staticdata_loading_database_municipalities.py first."
-        )
-
-    numeric_columns = [
-        "Population",
-        "DistanceClosestSupermarket",
-        "SupermarketsWithin1KM",
-        "SupermarketsWithin3KM",
-        "SupermarketsWithin5KM"
-    ]
-    for column in numeric_columns:
-        municipalities[column] = pd.to_numeric(
-            municipalities[column], errors="coerce"
-        )
-
-    # The importer stores an annual value as 1 January in the database DATE column
-    municipalities["Year"] = pd.to_datetime(
-        municipalities["Year"], errors="coerce"
-    ).dt.year.astype("Int64")
-
-    return municipalities
-
-
+# All data comes from the PostgreSQL database through the data access layer
+# (data_access.py). Each loader is cached, so the database is only queried again
+# when the cache expires.
 try:
-    municipalities = load_municipalities_from_database()
+    supermarkets = db.load_supermarkets()
+    economyStatistics = db.load_economy_statistics()
+    municipalities = db.load_municipalities()
+    basket_prices_monthly = db.load_monthly_basket_prices()
+    category_prices_monthly = db.load_monthly_category_prices()
 
 except Exception as e:
-    st.error(f"Could not load municipality data from the database: {e}")
+    st.error(f"Could not load data from the database: {e}")
+    st.stop()
+
+if municipalities.empty:
+    st.error(
+        "No municipality data was found in the database. "
+        "Run staticdata_loading_database_municipalities.py first."
+    )
     st.stop()
 
 # Create the dashboard with four tabs
@@ -190,19 +52,14 @@ with tab1:
 
     st.header("Supermarket Overview")
 
-# Use the most recent prices
-    latest_date = prices["Date"].max()
-    latest_prices = prices[prices["Date"] == latest_date]
-
-# Only essential basket products
-    basket = latest_prices[
-        latest_prices["IsBasketProduct"] == True
-    ]
-
-# Calculate basket price per supermarket
-    basket_prices = basket.groupby(
-        "SupermarketName"
-    )["Price"].sum().reset_index()
+# Use the most recent month with basket prices
+    if basket_prices_monthly.empty:
+        basket_prices = basket_prices_monthly
+    else:
+        latest_date = basket_prices_monthly["Date"].max()
+        basket_prices = basket_prices_monthly[
+            basket_prices_monthly["Date"] == latest_date
+        ]
 
     col1, col2, col3 = st.columns(3)
 
@@ -212,45 +69,54 @@ with tab1:
             value=len(supermarkets)
         )
 
+# Market shares are only shown once they have been filled in the database
     with col2:
-        st.metric(
-            label="Combined market share",
-            value=f"{supermarkets['MarketShare'].sum()}%"
-        )
+        if supermarkets["MarketShare"].notna().any():
+            st.metric(
+                label="Combined market share",
+                value=f"{supermarkets['MarketShare'].sum():.0f}%"
+            )
+        else:
+            st.metric(label="Combined market share", value="n/a")
 
     with col3:
-        st.metric(
-            label="Average basket price",
-            value=f"€{basket_prices['Price'].mean():.2f}"
-        )
+        if basket_prices.empty:
+            st.metric(label="Average basket price", value="n/a")
+        else:
+            st.metric(
+                label="Average basket price",
+                value=f"€{basket_prices['Price'].mean():.2f}"
+            )
 
     st.subheader("Basket prices per supermarket")
 
+    if basket_prices.empty:
+        st.info(
+            "No essential basket has been defined yet: no product has "
+            "isBasketProduct set in the database."
+        )
+    else:
+        fig = px.bar(
+            basket_prices,
+            x="SupermarketName",
+            y="Price",
+            color="SupermarketName",
+            hover_name="SupermarketName",
+            hover_data=["Products"],
+            labels={
+                "Price": "Basket price (€)",
+                "SupermarketName": "Supermarket",
+                "Products": "Basket products"
+            },
+            title=f"Basket price per supermarket ({latest_date:%B %Y})"
+        )
 
-# Combine the supermarket data with basket prices
-    comparison = basket_prices.merge(
-        supermarkets,
-        left_on="SupermarketName",
-        right_on="Name"
-    )
+        st.plotly_chart(fig, use_container_width=True)
 
-    fig = px.bar(
-        comparison,
-        x="SupermarketName",
-        y="Price",
-        color="SupermarketName",
-        hover_name="SupermarketName",
-        labels={
-            "Price": "Basket price (€)"
-        },
-        title="Basket price per supermarket"
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.write(
-        "This chart shows the average price of the essential basket in each supermarket."
-    )
+        st.write(
+            "This chart shows the price of the essential basket in each supermarket, "
+            "based on the average price of each basket product in the latest month."
+        )
 
 # PRICES TAB
 # Allows users to compare supermarket prices and monitor price development over time
@@ -271,35 +137,25 @@ with tab2:
             default=supermarkets["Name"].tolist()
         )
 
+# Every supermarket uses its own category names, so the list only contains the
+# categories of the selected supermarkets
+    filtered_categories = category_prices_monthly[
+        category_prices_monthly["SupermarketName"].isin(selected_supermarkets)
+    ]
+
     with col2:
         selected_category = st.selectbox(
             "Select category",
-            ["All categories"] + products["Category"].unique().tolist()
+            ["All categories"] + sorted(filtered_categories["Category"].unique().tolist())
         )
 
-# Filter data
-    filtered_prices = prices[
-        prices["SupermarketName"].isin(selected_supermarkets)
+# Essential basket prices of the selected supermarkets
+    filtered_basket = basket_prices_monthly[
+        basket_prices_monthly["SupermarketName"].isin(selected_supermarkets)
     ]
-
-    if selected_category != "All categories":
-        filtered_prices = filtered_prices[
-            filtered_prices["Category"] == selected_category
-        ]
-
-    latest_prices = filtered_prices[
-        filtered_prices["Date"] == filtered_prices["Date"].max()
-    ]
-
-    basket_prices = latest_prices[
-        latest_prices["IsBasketProduct"] == True
-    ]
-
-# Calculate the total price of essential basket products for each supermarket
-
-    basket_totals = basket_prices.groupby(
-        "SupermarketName"
-    )["Price"].sum()
+    basket_totals = filtered_basket[
+        filtered_basket["Date"] == filtered_basket["Date"].max()
+    ].set_index("SupermarketName")["Price"]
 
 # Only show the price metrics when data is available
 
@@ -327,31 +183,29 @@ with tab2:
 
     st.subheader("Price development over time")
 
-# Calculate basket prices for each supermarket over time
+# Basket prices for each supermarket over time
 # This helps identify whether essential food products are becoming more expensive
-    trend = filtered_prices[
-        filtered_prices["IsBasketProduct"] == True
-    ]
+    if filtered_basket.empty:
+        st.info(
+            "The essential basket price will appear here once basket products "
+            "are marked in the database (isBasketProduct)."
+        )
+    else:
+        fig = px.line(
+            filtered_basket,
+            x="Date",
+            y="Price",
+            color="SupermarketName",
+            markers=True,
+            title="Essential basket price over time",
+            labels={
+                "Date": "Month",
+                "Price": "Basket price (€)",
+                "SupermarketName": "Supermarket"
+            }
+        )
 
-    trend = trend.groupby(
-        ["Date", "SupermarketName"]
-    )["Price"].sum().reset_index()
-
-    fig = px.line(
-        trend,
-        x="Date",
-        y="Price",
-        color="SupermarketName",
-        markers=True,
-        title="Essential basket price over time",
-        labels={
-            "Date": "Date",
-            "Price": "Basket price (€)",
-            "SupermarketName": "Supermarket"
-        }
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
 
 
     st.subheader("Price comparison")
@@ -362,54 +216,81 @@ with tab2:
         placeholder="Search for milk, bread, bananas..."
     )
 
-# Filter products by name without considering capital letters
-# Partial product names can also be used
-    search_results = latest_prices[
-        latest_prices["Name"].str.contains(
-            search_product,
-            case=False,
-            na=False,
-            regex=False
+# The search runs in the database: product names are matched without considering
+# capital letters, and partial product names can also be used
+    if search_product.strip():
+        search_results = db.search_products(
+            search_product, tuple(selected_supermarkets)
         )
-    ]
 
-# Compare prices between supermarkets
-    comparison = search_results.pivot_table(
-        index="Name",
-        columns="SupermarketName",
-        values="Price"
-    )
+        if search_results.empty:
+            st.write("No products found.")
+        else:
+            if len(search_results) >= db.SEARCH_LIMIT:
+                st.caption(
+                    f"Showing the first {db.SEARCH_LIMIT} matching products. "
+                    "Refine your search to see more specific results."
+                )
 
-# Display results
-    st.dataframe(
-        comparison.round(2),
-        use_container_width=True
-    )
+# Hide the quantity column when the database has no product quantities
+            if search_results["Quantity"].isna().all():
+                search_results = search_results.drop(columns="Quantity")
+
+# Display the latest known price of every matching product
+            st.dataframe(
+                search_results.rename(columns={
+                    "SupermarketName": "Supermarket",
+                    "Name": "Product",
+                    "Price": "Latest price (€)",
+                    "Date": "Price date"
+                }),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Latest price (€)": st.column_config.NumberColumn(format="€%.2f"),
+                    "Price date": st.column_config.DateColumn(format="YYYY-MM-DD")
+                }
+            )
 
     st.subheader("Average product price by category")
 
-# Calculate the average product price per category over time
+# Calculate the average product price per supermarket over time
 # This helps identify categories where prices are increasing
-    category_prices = filtered_prices.groupby(
-        ["Date", "Category"]
-    )["Price"].mean().reset_index()
+    if selected_category == "All categories":
+        chart_data = filtered_categories.assign(
+            Total=filtered_categories["Price"] * filtered_categories["Products"]
+        ).groupby(["Date", "SupermarketName"], as_index=False)[["Total", "Products"]].sum()
+        chart_data["Price"] = chart_data["Total"] / chart_data["Products"]
+    else:
+        chart_data = filtered_categories[
+            filtered_categories["Category"] == selected_category
+        ]
 
     fig = px.line(
-        category_prices,
+        chart_data,
         x="Date",
         y="Price",
-        color="Category",
+        color="SupermarketName",
         markers=True,
+        title=f"Average product price: {selected_category.lower()}",
+        hover_data=["Products"],
         labels={
             "Price": "Average price (€)",
-            "Date": "Date"
+            "Date": "Month",
+            "SupermarketName": "Supermarket",
+            "Products": "Products"
         }
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
-# MUNICIPALITIES TAB
-# Shows supermarket accessibility in different Dutch municipalities
+    st.caption(
+        "Each product is averaged per month first; the chart shows the average "
+        "of those product prices."
+    )
+
+# ECONOMY TAB
+# Shows the monthly CPI, inflation and household income from the economy statistics
 
 with tab3:
     st.header("Citizen Economy")
@@ -421,9 +302,9 @@ with tab3:
             x="Date",
             y="CPI",
             markers=True,
-            title="Consumer Price Index (CPI)",
+            title="Consumer Price Index (CPI, 2015 = 100)",
             labels={
-            "Date": "Year",
+            "Date": "Month",
             "CPI": "Consumer Price Index (CPI)"
             },
             line_shape='spline'
@@ -432,21 +313,21 @@ with tab3:
         st.plotly_chart(CPI_Line, use_container_width=True)
 
     with col2:
-        # Display the CPI Yearly Rate of Change with a smoothed line
-        CPI_Yearly_Rate = px.line(
+        # Display the CPI change on the previous month with a smoothed line
+        CPI_Monthly_Rate = px.line(
             economyStatistics,
             x="Date",
-            y="CPIYearlyRateOfChange",
+            y="CPIMonthlyRateOfChange",
             markers=True,
             title="Monthly Rate of Change in CPI",
             labels={
-                "Date": "Year",
-                "CPIYearlyRateOfChange": "Monthly Rate of Change in CPI"
+                "Date": "Month",
+                "CPIMonthlyRateOfChange": "Change on the previous month (%)"
             },
             line_shape='spline'
         )
-        CPI_Yearly_Rate.update_traces(line_smoothing=0.75)  # Adjust smoothing factor
-        st.plotly_chart(CPI_Yearly_Rate, use_container_width=True)
+        CPI_Monthly_Rate.update_traces(line_smoothing=0.75)  # Adjust smoothing factor
+        st.plotly_chart(CPI_Monthly_Rate, use_container_width=True)
 
     income_cpi_increase_compare = make_subplots(specs=[[{"secondary_y": True}]])
     income_cpi_increase_compare.add_trace(
@@ -461,7 +342,7 @@ with tab3:
         }),
         secondary_y=False
         )
-    
+
     income_cpi_increase_compare.add_trace(
         go.Scatter(
             x=economyStatistics["Date"],
@@ -472,13 +353,18 @@ with tab3:
         secondary_y=True
     )
     income_cpi_increase_compare.update_layout(
-        title="CPI Monthly Rate of Change vs Average Disposable Income",
-        xaxis_title="Date",
-        yaxis_title="CPI Monthly Rate of Change (%)",
+        title="CPI Yearly Rate of Change (inflation) vs Average Disposable Income",
+        xaxis_title="Month",
+        yaxis_title="CPI change on a year earlier (%)",
         yaxis2_title="Average Disposable Income (€)",
         legend=dict(x=0.01, y=1.5, bordercolor="Black", borderwidth=1)
     )
     st.plotly_chart(income_cpi_increase_compare, use_container_width=True)
+
+    st.caption(
+        "Household income is published by CBS per year, so every month shows the "
+        "income of its year. Months without published income are left empty."
+    )
 
 with tab4:
 

@@ -4,6 +4,6 @@ WORKDIR /app
 COPY requirements.txt ./
 COPY municipalities.geojson ./
 RUN pip3 install -r ./requirements.txt
-COPY app.py .
+COPY app.py data_access.py ./
 
 CMD [ "streamlit", "run", "app.py" ]
