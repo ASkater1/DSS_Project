@@ -36,6 +36,17 @@ services:
       database:
         condition: service_healthy
     restart: "no"
+  category_importer:
+    container_name: category_importer
+    build: ./code/importer/categories  # where to find the Dockerfile to construct the image
+    env_file:
+      - .env
+    depends_on:
+      database:
+        condition: service_healthy
+      static_importer:
+        condition: service_completed_successfully
+    restart: "no"
   financial_importer:
     container_name: financial_importer
     build: ./code/importer/financial  # where to find the Dockerfile to construct the image

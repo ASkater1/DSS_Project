@@ -118,6 +118,67 @@ with tab1:
             "based on the average price of each basket product in the latest month."
         )
 
+    st.subheader("Average basket price per supermarket compared to increase of income")
+
+    if basket_prices_monthly.empty or economyStatistics.empty:
+        st.info("Not enough basket price and income data is available for this comparison.")
+    else:
+        basket_comparison = basket_prices_monthly.copy()
+        income_comparison = economyStatistics.copy()
+        basket_comparison["Date"] = pd.to_datetime(basket_comparison["Date"])
+        income_comparison["Date"] = pd.to_datetime(income_comparison["Date"])
+
+        # Income is stored as a monthly series; calculate its increase from
+        # the previous month before combining it with the basket prices.
+        income_comparison = income_comparison.sort_values("Date")
+        income_comparison["IncomeIncreasePerMonth"] = (
+            income_comparison["AverageDisposableIncome"].diff()
+        )
+
+        comparison_fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+        for supermarket_name, supermarket_data in basket_comparison.groupby(
+            "SupermarketName"
+        ):
+            comparison_fig.add_trace(
+                go.Scatter(
+                    x=supermarket_data["Date"],
+                    y=supermarket_data["Price"],
+                    mode="lines+markers",
+                    name=supermarket_name
+                ),
+                secondary_y=False
+            )
+
+        comparison_fig.add_trace(
+            go.Scatter(
+                x=income_comparison["Date"],
+                y=income_comparison["IncomeIncreasePerMonth"],
+                mode="lines+markers",
+                name="Income increase per month",
+                line={"dash": "dash", "color": "black"}
+            ),
+            secondary_y=True
+        )
+
+        comparison_fig.update_layout(
+            title="Monthly basket price compared with income increase",
+            xaxis_title="Month",
+            hovermode="x unified"
+        )
+        comparison_fig.update_yaxes(
+            title_text="Average basket price (€)", secondary_y=False
+        )
+        comparison_fig.update_yaxes(
+            title_text="Income increase per month (€)", secondary_y=True
+        )
+
+        st.plotly_chart(comparison_fig, use_container_width=True)
+        st.caption(
+            "Income increase is calculated as the change in average disposable "
+            "income compared with the previous month."
+        )
+
 # PRICES TAB
 # Allows users to compare supermarket prices and monitor price development over time
 
@@ -137,8 +198,9 @@ with tab2:
             default=supermarkets["Name"].tolist()
         )
 
-# Every supermarket uses its own category names, so the list only contains the
-# categories of the selected supermarkets
+# Products are grouped into shared categories (see code/importer/categories), so the
+# same category can be compared between supermarkets. The list only contains the
+# categories of the selected supermarkets.
     filtered_categories = category_prices_monthly[
         category_prices_monthly["SupermarketName"].isin(selected_supermarkets)
     ]

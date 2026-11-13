@@ -28,8 +28,11 @@ LONG_CACHE_TTL = 6 * 60 * 60
 # Maximum number of products returned by the product search
 SEARCH_LIMIT = 200
 
-# SQL expression that turns the raw category path into a top-level category.
-# Every supermarket stores its category path in a different format:
+# Fallback for databases without shared categories (Categories table and
+# Products.categoryId, filled by code/importer/categories/category_importer.py):
+# an SQL expression that turns the raw category path into a top-level category.
+# These are not comparable between supermarkets. Every supermarket stores its
+# category path in a different format:
 #   AH     Home\Producten\Zuivel, eieren\Yoghurt en skyr\...  -> "Zuivel, eieren"
 #   Plus   Zuivel eieren boter\Verse zuivel\Yoghurt           -> "Zuivel eieren boter"
 #   Jumbo  Koek, snoep, chocolade en chips ; Chocolade ; ...  -> "Koek, snoep, chocolade en chips"
@@ -170,6 +173,7 @@ def load_municipalities() -> pd.DataFrame:
 # days do not weigh more; those product averages are then averaged per category.
 @st.cache_data(ttl=LONG_CACHE_TTL, show_spinner="Calculating monthly category prices from all price records (the first load takes about 20 seconds)...")
 def load_monthly_category_prices() -> pd.DataFrame:
+    category, category_join = category_sql()
     prices = run_query(f"""
         WITH product_month AS (
             SELECT
@@ -184,12 +188,13 @@ def load_monthly_category_prices() -> pd.DataFrame:
         SELECT
             pm.month AS "Date",
             s.name AS "SupermarketName",
-            {TOP_CATEGORY_SQL} AS "Category",
+            {category} AS "Category",
             avg(pm.price) AS "Price",
             count(*) AS "Products"
         FROM product_month pm
         JOIN products p ON p.productid = pm.productid
         JOIN supermarkets s ON s.supermarketid = pm.supermarketid
+        {category_join}
         GROUP BY pm.month, s.name, 3
         ORDER BY pm.month, s.name, 3
     """, work_mem="512MB")
@@ -230,6 +235,26 @@ def load_monthly_basket_prices() -> pd.DataFrame:
 
 
 
+# Function to choose how products are grouped into categories: the shared
+# categories when the database has them, otherwise each supermarket's own
+# top-level category. Returns the SQL expression and the JOIN it needs.
+@st.cache_data(ttl=CACHE_TTL)
+def category_sql() -> tuple[str, str]:
+    columns = run_query("""
+        SELECT table_name, column_name
+        FROM information_schema.columns
+        WHERE table_name IN ('products', 'categories')
+    """)
+    has_shared_categories = (
+        (columns["table_name"] == "categories").any()
+        and "categoryid" in set(columns.loc[columns["table_name"] == "products", "column_name"])
+    )
+    if has_shared_categories:
+        return "COALESCE(c.name, 'Onbekend')", "LEFT JOIN categories c ON c.categoryid = p.categoryid"
+    return TOP_CATEGORY_SQL, ""
+
+
+
 # Function to check whether the products table has the quantity columns
 # (databases created from an older initdb.sql do not have them)
 @st.cache_data(ttl=CACHE_TTL)
@@ -256,12 +281,13 @@ def search_products(search_text: str, supermarket_names: tuple[str, ...]) -> pd.
         if products_have_quantity() else "NULL::text"
     )
 
+    category, category_join = category_sql()
     results = run_query(f"""
         SELECT
             s.name AS "SupermarketName",
             p.name AS "Name",
             {quantity_sql} AS "Quantity",
-            {TOP_CATEGORY_SQL} AS "Category",
+            {category} AS "Category",
             latest.price AS "Price",
             latest.date AS "Date"
         FROM (
@@ -280,6 +306,7 @@ def search_products(search_text: str, supermarket_names: tuple[str, ...]) -> pd.
             LIMIT 1
         ) latest
         JOIN supermarkets s ON s.supermarketid = latest.supermarketid
+        {category_join}
         ORDER BY p.name, s.name
     """, {
         "pattern": f"%{search_text.strip()}%",

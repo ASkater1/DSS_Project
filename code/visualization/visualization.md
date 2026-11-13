@@ -56,7 +56,7 @@ The following optional variable can also be configured:
 
 ## Code Structure
 The data_access.py script is organized into three main sections:
-* Imports and configuration: imports the necessary Python libraries and defines the cache durations, the search limit and the SQL expression for top-level categories.
+* Imports and configuration: imports the necessary Python libraries and defines the cache durations, the search limit and the fallback SQL expression for top-level categories.
 * Helper functions: opens the database connection, runs a query and returns the result as a DataFrame, and converts database decimals to numbers.
 * Data loading functions: one function per type of data used by the dashboard:
   * load_supermarkets(): supermarket IDs, names and market shares.
@@ -76,13 +76,17 @@ The app.py script is organized into two main sections:
 
 **Note: Monthly prices**: Each product is first averaged per month, and those product averages are then averaged per category, so that products that were recorded on more days do not count more heavily. This assumes that every product has a price record in every month. When the database only contains price changes (see the static importer), products whose price did not change during a month are missing from that month's average.
 
-**Note: Top-level categories**: Every supermarket stores its category path in a different format, so the TOP_CATEGORY_SQL expression extracts the first level for each format:
+**Note: Shared categories**: Products are grouped by the shared categories in the Categories table, which are filled by the category importer (see code/importer/categories/category_importer.md). Because every supermarket uses the same 25 categories, the category chart on the Prices tab can compare supermarkets directly. Products without a shared category are shown as Onbekend. The category filter only lists the categories of the selected supermarkets.
+
+When the database does not have shared categories yet (no Categories table or no Products.categoryId column), the dashboard falls back to each supermarket's own top-level category, using the TOP_CATEGORY_SQL expression:
 * AH: Home\Producten\Zuivel, eieren\Yoghurt en skyr\... becomes Zuivel, eieren
 * Plus: Zuivel eieren boter\Verse zuivel\Yoghurt becomes Zuivel eieren boter
 * Jumbo: Koek, snoep, chocolade en chips ; Chocolade ; ... becomes Koek, snoep, chocolade en chips
 * Lidl: Home/Eten & drinken/Kaas & Zuivel &&& ... becomes Kaas & Zuivel
 
-Category paths in any other format become Overig. This applies to most Lidl products, which only have German Open Food Facts labels. Since every chain uses its own category names, the category filter on the Prices tab only lists the categories of the selected supermarkets.
+These fallback categories are not comparable between supermarkets. Category paths in any other format become Overig.
+
+**Note: Comparing category prices**: Even with shared categories, the average price of a category also depends on which products a supermarket sells: a chain with more premium products or larger packs has a higher average without being more expensive for the same product. The category chart shows price development and differences in the range, not the price of identical products. The essential basket is meant for comparing identical products.
 
 **Note: Missing data**: When data is not available yet, the dashboard shows an explanation instead of an empty or made-up chart:
 * Essential basket: the basket metrics and charts need products with isBasketProduct set to true in the Products table.

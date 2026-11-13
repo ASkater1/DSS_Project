@@ -1,0 +1,5 @@
+#Required dependencies to execute the shared category importer
+pandas
+psycopg2-binary==2.9.9
+SQLAlchemy
+python-dotenv
