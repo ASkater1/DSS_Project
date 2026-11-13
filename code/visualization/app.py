@@ -11,9 +11,77 @@ import requests
 
 import data_access as db
 
-# All data comes from the PostgreSQL database through the data access layer
-# (data_access.py). Each loader is cached, so the database is only queried again
-# when the cache expires.
+#Textual presets for date filters
+st.set_page_config(layout="wide")
+
+
+DATE_PRESETS = [
+    "All available dates",
+    "Custom range",
+]
+
+#Function to render a date range filter for each of the dashboard tabs
+#It returns the selected start and end dates as timestamps, or None if there is no date available
+#in the selection.
+def render_date_filter(dataframes, key):
+    """Render a date range control and return the selected pandas timestamps."""
+    date_values = [
+        pd.to_datetime(dataframe["Date"], errors="coerce")
+        for dataframe in dataframes
+        if "Date" in dataframe.columns
+    ]
+    valid_dates = pd.concat(date_values).dropna() if date_values else pd.Series(dtype="datetime64[ns]")
+
+    if valid_dates.empty:
+        st.info("No dates are available for this filter.")
+        return None, None
+
+    minimum_date = valid_dates.min().date()
+    maximum_date = valid_dates.max().date()
+    preset = st.selectbox("Date range", DATE_PRESETS, key=f"{key}_preset")
+
+    if preset == "Custom range":
+        start_col, end_col = st.columns(2)
+        with start_col:
+            start_date = st.date_input(
+                "Start date",
+                value=minimum_date,
+                min_value=minimum_date,
+                max_value=maximum_date,
+                key=f"{key}_start",
+            )
+        with end_col:
+            end_date = st.date_input(
+                "End date",
+                value=maximum_date,
+                min_value=minimum_date,
+                max_value=maximum_date,
+                key=f"{key}_end",
+            )
+    else:
+        start_date = minimum_date
+        end_date = maximum_date
+
+    if start_date > end_date:
+        st.error("The start date must be on or before the end date.")
+        return None, None
+
+    st.caption(f"Showing data from {start_date:%Y-%m-%d} through {end_date:%Y-%m-%d}.")
+    return pd.Timestamp(start_date), pd.Timestamp(end_date)
+
+#Filter to select the rows of the database that fall within the selected date range.
+def filter_by_date(dataframe, start_date, end_date):
+    """Keep rows whose Date falls inside the selected inclusive date range."""
+    if start_date is None or end_date is None or "Date" not in dataframe.columns:
+        return dataframe.iloc[0:0]
+    dates = pd.to_datetime(dataframe["Date"], errors="coerce")
+    end_exclusive = end_date + pd.Timedelta(days=1)
+    return dataframe.loc[
+        dates.ge(start_date) & dates.lt(end_exclusive)
+    ].copy()
+
+
+# Functions to fetch the data from the database.
 try:
     supermarkets = db.load_supermarkets()
     economyStatistics = db.load_economy_statistics()
@@ -21,6 +89,7 @@ try:
     basket_prices_monthly = db.load_monthly_basket_prices()
     category_prices_monthly = db.load_monthly_category_prices()
 
+#Exception handling for database connection issues, or data loading errors.
 except Exception as e:
     st.error(f"Could not load data from the database: {e}")
     st.stop()
@@ -51,14 +120,23 @@ tab1, tab2, tab3, tab4= st.tabs([
 with tab1:
 
     st.header("Supermarket Overview")
+    overview_start, overview_end = render_date_filter(
+        [basket_prices_monthly, economyStatistics], "overview"
+    )
+    filtered_overview_basket = filter_by_date(
+        basket_prices_monthly, overview_start, overview_end
+    )
+    filtered_overview_economy = filter_by_date(
+        economyStatistics, overview_start, overview_end
+    )
 
 # Use the most recent month with basket prices
-    if basket_prices_monthly.empty:
-        basket_prices = basket_prices_monthly
+    if filtered_overview_basket.empty:
+        basket_prices = filtered_overview_basket
     else:
-        latest_date = basket_prices_monthly["Date"].max()
-        basket_prices = basket_prices_monthly[
-            basket_prices_monthly["Date"] == latest_date
+        latest_date = filtered_overview_basket["Date"].max()
+        basket_prices = filtered_overview_basket[
+            filtered_overview_basket["Date"] == latest_date
         ]
 
     col1, col2, col3 = st.columns(3)
@@ -120,11 +198,11 @@ with tab1:
 
     st.subheader("Average basket price per supermarket compared to increase of income")
 
-    if basket_prices_monthly.empty or economyStatistics.empty:
+    if filtered_overview_basket.empty or filtered_overview_economy.empty:
         st.info("Not enough basket price and income data is available for this comparison.")
     else:
-        basket_comparison = basket_prices_monthly.copy()
-        income_comparison = economyStatistics.copy()
+        basket_comparison = filtered_overview_basket.copy()
+        income_comparison = filtered_overview_economy.copy()
         basket_comparison["Date"] = pd.to_datetime(basket_comparison["Date"])
         income_comparison["Date"] = pd.to_datetime(income_comparison["Date"])
 
@@ -183,10 +261,11 @@ with tab1:
 # Allows users to compare supermarket prices and monitor price development over time
 
 with tab2:
-
     st.header("Supermarket Prices")
-
     st.write("Compare supermarket prices and monitor changes over time.")
+    prices_start, prices_end = render_date_filter(
+        [basket_prices_monthly, category_prices_monthly], "prices"
+    )
 
 # Filters
     col1, col2 = st.columns(2)
@@ -204,6 +283,9 @@ with tab2:
     filtered_categories = category_prices_monthly[
         category_prices_monthly["SupermarketName"].isin(selected_supermarkets)
     ]
+    filtered_categories = filter_by_date(
+        filtered_categories, prices_start, prices_end
+    )
 
     with col2:
         selected_category = st.selectbox(
@@ -215,6 +297,7 @@ with tab2:
     filtered_basket = basket_prices_monthly[
         basket_prices_monthly["SupermarketName"].isin(selected_supermarkets)
     ]
+    filtered_basket = filter_by_date(filtered_basket, prices_start, prices_end)
     basket_totals = filtered_basket[
         filtered_basket["Date"] == filtered_basket["Date"].max()
     ].set_index("SupermarketName")["Price"]
@@ -356,11 +439,17 @@ with tab2:
 
 with tab3:
     st.header("Citizen Economy")
+    economy_start, economy_end = render_date_filter(
+        [economyStatistics], "economy"
+    )
+    filtered_economy = filter_by_date(
+        economyStatistics, economy_start, economy_end
+    )
 
     col1, col2 = st.columns(2)
     with col1:
         CPI_Line = px.line(
-            economyStatistics,
+            filtered_economy,
             x="Date",
             y="CPI",
             markers=True,
@@ -377,7 +466,7 @@ with tab3:
     with col2:
         # Display the CPI change on the previous month with a smoothed line
         CPI_Monthly_Rate = px.line(
-            economyStatistics,
+            filtered_economy,
             x="Date",
             y="CPIMonthlyRateOfChange",
             markers=True,
@@ -394,8 +483,8 @@ with tab3:
     income_cpi_increase_compare = make_subplots(specs=[[{"secondary_y": True}]])
     income_cpi_increase_compare.add_trace(
         go.Scatter(
-            x=economyStatistics["Date"],
-            y=economyStatistics["CPIYearlyRateOfChange"],
+            x=filtered_economy["Date"],
+            y=filtered_economy["CPIYearlyRateOfChange"],
             mode="lines+markers",
             name="CPI Yearly Rate of Change",
             line={
@@ -407,8 +496,8 @@ with tab3:
 
     income_cpi_increase_compare.add_trace(
         go.Scatter(
-            x=economyStatistics["Date"],
-            y=economyStatistics["AverageDisposableIncome"],
+            x=filtered_economy["Date"],
+            y=filtered_economy["AverageDisposableIncome"],
             mode="lines",
             name="Average Disposable Income"
         ),
