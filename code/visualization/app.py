@@ -112,6 +112,102 @@ def filter_by_date(dataframe, start_date, end_date):
     ].copy()
 
 
+#Function to draw a price index chart: one line per supermarket and a grey comparison line
+#(such as the CPI or cao wages), all rescaled to 100 in the base month by chain_price_index()
+#in data_access.py.
+def draw_price_index_chart(price_index, comparison_index, selected_supermarkets, category,
+                           comparison_name, comparison_short, comparison_caption):
+    if price_index.empty:
+        st.info("No price data is available for this selection.")
+        return
+
+    # The base month is the first month shown for this category
+    base_month = price_index["Date"].min()
+
+    missing = sorted(set(selected_supermarkets) - set(price_index["SupermarketName"]))
+    if missing:
+        st.caption(f"No data for this category: {', '.join(missing)}.")
+
+    late_starters = price_index.groupby("SupermarketName")["Date"].min()
+    late_starters = late_starters[late_starters > base_month]
+    if not late_starters.empty:
+        st.caption(
+            f"Starts later, at the {comparison_short} level of its first month: "
+            + ", ".join(f"{name} ({month:%B %Y})" for name, month in late_starters.items())
+            + "."
+        )
+
+    # Fixed colour per supermarket, so a supermarket keeps its colour when filtering
+    colours = dict(zip(supermarkets["Name"], px.colors.qualitative.Plotly))
+
+    fig = go.Figure()
+
+    # Comparison line rescaled to 100 in the same base month
+    if comparison_index.empty:
+        st.caption(f"{comparison_name} is not available for {base_month:%B %Y}, so it is not shown.")
+    else:
+        fig.add_trace(go.Scatter(
+            x=comparison_index["Date"],
+            y=comparison_index["Index"],
+            mode="lines",
+            name=comparison_name,
+            line={"color": "#888780", "width": 4},
+            opacity=0.6,
+            hovertemplate=f"{comparison_name}: %{{y:.1f}}<extra></extra>"
+        ))
+
+    for supermarket_name, data in price_index.groupby("SupermarketName"):
+        notes = np.where(
+            data["LowReliability"],
+            f"<br>fewer than {db.MIN_COMPARABLE_PRODUCTS} comparable products",
+            ""
+        )
+        notes = notes + np.where(
+            (data["PriceChanges"] == 0) & (data["Products"] > 0),
+            "<br>no price changes this month",
+            ""
+        )
+        fig.add_trace(go.Scatter(
+            x=data["Date"],
+            y=data["Index"],
+            mode="lines+markers",
+            name=supermarket_name,
+            line={"color": colours.get(supermarket_name), "width": 2},
+            # Less reliable months get a lighter dot
+            marker={
+                "color": colours.get(supermarket_name),
+                "size": 6,
+                "opacity": np.where(data["LowReliability"], 0.3, 1).tolist()
+            },
+            customdata=list(zip(data["Products"].astype(int), notes)),
+            hovertemplate=(
+                f"{supermarket_name}: %{{y:.1f}}"
+                "<br>based on %{customdata[0]:,.0f} comparable products"
+                "%{customdata[1]}<extra></extra>"
+            )
+        ))
+
+    fig.update_layout(
+        title=f"Price index: {category.lower()} compared with {comparison_short} ({base_month:%B %Y} = 100)",
+        xaxis_title="Month",
+        yaxis_title=f"Index ({base_month:%b %Y} = 100)",
+        legend_title=f"Supermarket / {comparison_short}",
+        hovermode="x unified"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.caption(
+        "The index shows how much the prices of the same products changed since the "
+        "base month: 110 means 10% more expensive. Each month only products that also "
+        "had a price the month before are compared, so newly added products do not "
+        "cause jumps. A month without price changes keeps the level of the month "
+        "before. Lighter dots are based on fewer than "
+        f"{db.MIN_COMPARABLE_PRODUCTS} comparable products. {comparison_caption} "
+        "The base month is the first month shown; a supermarket whose data starts later "
+        f"starts at the {comparison_short} level of its first month."
+    )
+
+
 # SIDEBAR
 # The dashboard has four pages, chosen with four tiles in the sidebar. Below the tiles
 # the sidebar shows the filters of the selected page (added by each page further down).
@@ -481,7 +577,7 @@ elif page == "Prices":
                 }
             )
 
-    st.subheader("Price index by category")
+    st.subheader("Price index compared with CPI")
 
 # Price index of the same products per supermarket, compared with the CPI, calculated in
 # data_access.py. Unlike an average price, it does not jump when products are added.
@@ -489,99 +585,38 @@ elif page == "Prices":
 # starts at the CPI level of its first month.
     price_index, cpi_index = db.chain_price_index(
         filtered_index_links, selected_category, selected_supermarkets,
-        economyStatistics[["Date", "CPI"]]
+        economyStatistics[["Date", "CPI"]].rename(columns={"CPI": "Value"})
+    )
+    draw_price_index_chart(
+        price_index, cpi_index, selected_supermarkets, selected_category,
+        comparison_name="CPI (all items)",
+        comparison_short="CPI",
+        comparison_caption=(
+            "The grey line is the consumer price index (CPI, all goods and services, CBS), "
+            "rescaled to 100 in the same base month."
+        )
     )
 
-    if price_index.empty:
-        st.info("No price data is available for this selection.")
-    else:
-        # The base month is the first month shown for this category
-        base_month = price_index["Date"].min()
+    st.subheader("Price index compared with cao wages")
 
-        missing = sorted(set(selected_supermarkets) - set(price_index["SupermarketName"]))
-        if missing:
-            st.caption(f"No data for this category: {', '.join(missing)}.")
-
-        late_starters = price_index.groupby("SupermarketName")["Date"].min()
-        late_starters = late_starters[late_starters > base_month]
-        if not late_starters.empty:
-            st.caption(
-                "Starts later, at the CPI level of its first month: "
-                + ", ".join(f"{name} ({month:%B %Y})" for name, month in late_starters.items())
-                + "."
-            )
-
-        # Fixed colour per supermarket, so a supermarket keeps its colour when filtering
-        colours = dict(zip(supermarkets["Name"], px.colors.qualitative.Plotly))
-
-        fig = go.Figure()
-
-        # CPI (all goods and services, CBS) rescaled to 100 in the same base month, so
-        # supermarket price changes can be compared with general inflation
-        if cpi_index.empty:
-            st.caption(f"CPI is not available for {base_month:%B %Y}, so it is not shown.")
-        else:
-            fig.add_trace(go.Scatter(
-                x=cpi_index["Date"],
-                y=cpi_index["Index"],
-                mode="lines",
-                name="CPI (all items)",
-                line={"color": "#888780", "width": 4},
-                opacity=0.6,
-                hovertemplate="CPI: %{y:.1f}<extra></extra>"
-            ))
-
-        for supermarket_name, data in price_index.groupby("SupermarketName"):
-            notes = np.where(
-                data["LowReliability"],
-                f"<br>fewer than {db.MIN_COMPARABLE_PRODUCTS} comparable products",
-                ""
-            )
-            notes = notes + np.where(
-                (data["PriceChanges"] == 0) & (data["Products"] > 0),
-                "<br>no price changes this month",
-                ""
-            )
-            fig.add_trace(go.Scatter(
-                x=data["Date"],
-                y=data["Index"],
-                mode="lines+markers",
-                name=supermarket_name,
-                line={"color": colours.get(supermarket_name), "width": 2},
-                # Less reliable months get a lighter dot
-                marker={
-                    "color": colours.get(supermarket_name),
-                    "size": 6,
-                    "opacity": np.where(data["LowReliability"], 0.3, 1).tolist()
-                },
-                customdata=list(zip(data["Products"].astype(int), notes)),
-                hovertemplate=(
-                    f"{supermarket_name}: %{{y:.1f}}"
-                    "<br>based on %{customdata[0]:,.0f} comparable products"
-                    "%{customdata[1]}<extra></extra>"
-                )
-            ))
-
-        fig.update_layout(
-            title=f"Price index: {selected_category.lower()} compared with CPI ({base_month:%B %Y} = 100)",
-            xaxis_title="Month",
-            yaxis_title=f"Index ({base_month:%b %Y} = 100)",
-            legend_title="Supermarket / CPI",
-            hovermode="x unified"
+# The same price index, compared with collective (cao) wages. The wage line is built from
+# the stored yearly cao wage increase (YearlyWageIncrease), see data_access.py.
+    price_index, wage_index = db.chain_price_index(
+        filtered_index_links, selected_category, selected_supermarkets,
+        db.wage_level_from_yearly_increase(economyStatistics)
+    )
+    draw_price_index_chart(
+        price_index, wage_index, selected_supermarkets, selected_category,
+        comparison_name="Cao wages (estimate)",
+        comparison_short="cao wages",
+        comparison_caption=(
+            "The grey line shows collective (cao) wages per month, including special "
+            "payments, for all sectors, rescaled to 100 in the same base month. It is an "
+            "estimate built from the yearly cao wage increase of each month: CBS raises cao "
+            "wages mostly in January and July, so the real wage level rises in steps, while "
+            "this line spreads each increase evenly over the year."
         )
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.caption(
-            "The index shows how much the prices of the same products changed since the "
-            "base month: 110 means 10% more expensive. Each month only products that also "
-            "had a price the month before are compared, so newly added products do not "
-            "cause jumps. A month without price changes keeps the level of the month "
-            "before. Lighter dots are based on fewer than "
-            f"{db.MIN_COMPARABLE_PRODUCTS} comparable products. The grey line is the "
-            "consumer price index (CPI, all goods and services, CBS), rescaled to 100 in "
-            "the same base month. The base month is the first month shown; a supermarket "
-            "whose data starts later starts at the CPI level of its first month."
-        )
+    )
 
 # ECONOMY PAGE
 # Shows the monthly CPI, inflation and household income from the economy statistics

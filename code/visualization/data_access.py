@@ -239,17 +239,19 @@ def load_price_index_links() -> pd.DataFrame:
 
 
 # Function to turn the monthly links into a price index for one category (or ALL_FOOD)
-# and the selected supermarkets, compared with the CPI.
+# and the selected supermarkets, compared with another series such as the CPI or wages.
+# The comparison series is a DataFrame with the columns Date and Value (any level, for
+# example the CPI with 2015 = 100).
 # The base month is the first month shown: the earliest month in the given links (so the
-# date filter decides it). In the base month the CPI and every supermarket with data are
-# 100; from there the monthly changes are multiplied. A supermarket whose data starts
-# later (such as Lidl) starts at the CPI level of its first month and follows its own
-# price changes from there. A month without price changes keeps the index at the level
-# of the month before. Months without any data for a supermarket stay empty (the chart
-# connects the line).
-# Returns the price index and the CPI rescaled to 100 in the base month.
+# date filter decides it). In the base month the comparison series and every supermarket
+# with data are 100; from there the monthly changes are multiplied. A supermarket whose
+# data starts later (such as Lidl) starts at the comparison level of its first month and
+# follows its own price changes from there. A month without price changes keeps the index
+# at the level of the month before. Months without any data for a supermarket stay empty
+# (the chart connects the line).
+# Returns the price index and the comparison series rescaled to 100 in the base month.
 def chain_price_index(links: pd.DataFrame, category: str, supermarkets: list[str],
-                      cpi: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+                      comparison: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     selected = links[links["SupermarketName"].isin(supermarkets)]
 
     if category == ALL_FOOD:
@@ -273,15 +275,20 @@ def chain_price_index(links: pd.DataFrame, category: str, supermarkets: list[str
     # The base month: the first month shown
     base_month = selected["Date"].min()
 
-    # CPI rescaled to 100 in the base month, for the months of the chart
-    cpi = cpi.dropna(subset=["CPI"])
-    cpi = cpi[(cpi["Date"] >= base_month) & (cpi["Date"] <= selected["Date"].max())]
-    cpi_base = cpi.loc[cpi["Date"] == base_month, "CPI"]
-    if cpi_base.empty:
-        cpi_index = pd.DataFrame(columns=["Date", "Index"])
+    # Comparison series rescaled to 100 in the base month, for the months of the chart
+    comparison = comparison.dropna(subset=["Value"])
+    comparison = comparison[
+        (comparison["Date"] >= base_month) & (comparison["Date"] <= selected["Date"].max())
+    ]
+    comparison_base = comparison.loc[comparison["Date"] == base_month, "Value"]
+    if comparison_base.empty:
+        comparison_index = pd.DataFrame(columns=["Date", "Index"])
     else:
-        cpi_index = pd.DataFrame({"Date": cpi["Date"], "Index": 100 * cpi["CPI"] / cpi_base.iloc[0]})
-    cpi_level = cpi_index.set_index("Date")["Index"]
+        comparison_index = pd.DataFrame({
+            "Date": comparison["Date"],
+            "Index": 100 * comparison["Value"] / comparison_base.iloc[0]
+        })
+    comparison_level = comparison_index.set_index("Date")["Index"]
 
     chained = []
     for supermarket, data in selected.groupby("SupermarketName"):
@@ -291,12 +298,12 @@ def chain_price_index(links: pd.DataFrame, category: str, supermarkets: list[str
         relative = np.exp(data["AvgLogRatio"].fillna(0).cumsum())
         start_month = data["Date"].iloc[0]
 
-        # Starting level: 100 in the base month, or the CPI level of the first month for
-        # a supermarket whose data starts later (left out when that CPI is unknown)
+        # Starting level: 100 in the base month, or the comparison level of the first month
+        # for a supermarket whose data starts later (left out when that level is unknown)
         if start_month == base_month:
             start_level = 100.0
-        elif start_month in cpi_level.index:
-            start_level = cpi_level[start_month]
+        elif start_month in comparison_level.index:
+            start_level = comparison_level[start_month]
         else:
             continue
 
@@ -305,14 +312,31 @@ def chain_price_index(links: pd.DataFrame, category: str, supermarkets: list[str
         chained.append(data)
 
     if not chained:
-        return pd.DataFrame(columns=columns), cpi_index
+        return pd.DataFrame(columns=columns), comparison_index
     index = pd.concat(chained, ignore_index=True)
 
     # A month is less reliable when it is based on few comparable products; the first
     # month of every supermarket is the starting point and has nothing to compare with
     first_month = index["Date"] == index.groupby("SupermarketName")["Date"].transform("min")
     index["LowReliability"] = (index["Products"] < MIN_COMPARABLE_PRODUCTS) & ~first_month
-    return index[columns].sort_values(["SupermarketName", "Date"]).reset_index(drop=True), cpi_index
+    return index[columns].sort_values(["SupermarketName", "Date"]).reset_index(drop=True), comparison_index
+
+
+
+# Function to build a monthly cao wage level from the stored yearly wage increases
+# (YearlyWageIncrease: the change of cao wages compared with the same month a year
+# earlier). Each month the level grows by the twelfth root of that month's yearly
+# change, for example 4.7% per year becomes about 0.38% per month. CBS raises cao wages
+# mostly in January and July, so this approximation is smoother than the real cao wage
+# index. Returns a DataFrame with Date and Value (100 in the first month).
+def wage_level_from_yearly_increase(economy: pd.DataFrame) -> pd.DataFrame:
+    wages = economy[["Date", "YearlyWageIncrease"]].dropna().sort_values("Date")
+    if wages.empty:
+        return pd.DataFrame(columns=["Date", "Value"])
+    monthly_factor = (1 + wages["YearlyWageIncrease"] / 100) ** (1 / 12)
+    # The first month is the starting point (100); growth starts from the second month
+    monthly_factor.iloc[0] = 1.0
+    return pd.DataFrame({"Date": wages["Date"], "Value": 100 * monthly_factor.cumprod()})
 
 
 
