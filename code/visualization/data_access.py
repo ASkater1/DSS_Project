@@ -323,6 +323,56 @@ def chain_price_index(links: pd.DataFrame, category: str, supermarkets: list[str
 
 
 
+# Function to calculate the price change of the same products per food category and
+# supermarket, for the "price change per category" bar chart.
+# The period is set by the date filter: from the first month in the given links (the
+# start of the date range) up to the last month. A supermarket whose data starts later
+# (such as Lidl) covers its own, shorter period from its first month; its start month is
+# returned in StartMonth, so the chart can say so. The change is the product of the
+# monthly changes after the start month: (geometric mean ratio of month 1) x (month 2)
+# x ... - 1. Also returns ALL_FOOD (all food categories together) and the average number
+# of comparable products per month, to mark less reliable bars.
+# Returns the changes and the start and end month of the period.
+def category_price_changes(links: pd.DataFrame, supermarkets: list[str]
+                           ) -> tuple[pd.DataFrame, pd.Timestamp | None, pd.Timestamp | None]:
+    columns = ["Category", "SupermarketName", "Change", "Products", "LowReliability", "StartMonth"]
+    food = links[links["SupermarketName"].isin(supermarkets) & links["IsFood"]].copy()
+    if food.empty:
+        return pd.DataFrame(columns=columns), None, None
+
+    start_month = food["Date"].min()
+    end_month = food["Date"].max()
+
+    # Start month per supermarket: the start of the period, or its first month with data
+    supermarket_start = food.groupby("SupermarketName")["Date"].min()
+    food["StartMonth"] = food["SupermarketName"].map(supermarket_start)
+
+    # Only the monthly changes after each supermarket's start month count
+    period = food[food["Date"] > food["StartMonth"]].copy()
+    if period.empty:
+        return pd.DataFrame(columns=columns), start_month, end_month
+
+    # All food: per month the category averages weighted by their comparable products
+    period["WeightedLog"] = period["AvgLogRatio"].fillna(0) * period["Products"]
+    all_food = period.groupby(["Date", "SupermarketName"], as_index=False)[
+        ["WeightedLog", "Products"]
+    ].sum()
+    all_food["AvgLogRatio"] = all_food["WeightedLog"] / all_food["Products"].where(all_food["Products"] > 0)
+    all_food["Category"] = ALL_FOOD
+    combined = pd.concat([period, all_food], ignore_index=True)
+
+    changes = combined.groupby(["Category", "SupermarketName"], as_index=False).agg(
+        LogChange=("AvgLogRatio", lambda values: values.fillna(0).sum()),
+        Products=("Products", "mean")
+    )
+    changes["StartMonth"] = changes["SupermarketName"].map(supermarket_start)
+    # Rounded to one decimal; + 0.0 turns a rounded -0.0 into 0.0
+    changes["Change"] = (100 * (np.exp(changes["LogChange"]) - 1)).round(1) + 0.0
+    changes["LowReliability"] = changes["Products"] < MIN_COMPARABLE_PRODUCTS
+    return changes[columns], start_month, end_month
+
+
+
 # Function to build a monthly cao wage level from the stored yearly wage increases
 # (YearlyWageIncrease: the change of cao wages compared with the same month a year
 # earlier). Each month the level grows by the twelfth root of that month's yearly

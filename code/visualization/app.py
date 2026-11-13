@@ -618,6 +618,98 @@ elif page == "Prices":
         )
     )
 
+    st.subheader("Price change per category")
+
+# Percentage price change of the same products per food category and supermarket over
+# one common period (KPI: % price change per category of products), calculated in
+# data_access.py. This chart shows all food categories, so the category filter does
+# not apply to it; the date range and supermarket filters do.
+    category_changes, change_start, change_end = db.category_price_changes(
+        filtered_index_links, selected_supermarkets
+    )
+
+    if category_changes.empty:
+        st.info("Not enough price data is available for this selection.")
+    else:
+        # Categories from the largest to the smallest average change, with All food on top
+        order = (
+            category_changes[category_changes["Category"] != db.ALL_FOOD]
+            .groupby("Category")["Change"].mean()
+            .sort_values(ascending=False)
+            .index.tolist()
+        )
+        order = [db.ALL_FOOD] + order
+
+        colours = dict(zip(supermarkets["Name"], px.colors.qualitative.Plotly))
+        change_fig = go.Figure()
+        for supermarket_name in selected_supermarkets:
+            data = category_changes[category_changes["SupermarketName"] == supermarket_name]
+            if data.empty:
+                continue
+            data = data.set_index("Category").reindex(order).dropna(subset=["Change"]).reset_index()
+            notes = np.where(
+                data["LowReliability"],
+                f"<br>fewer than {db.MIN_COMPARABLE_PRODUCTS} comparable products",
+                ""
+            )
+            # A supermarket whose data starts later covers a shorter period
+            supermarket_start = data["StartMonth"].iloc[0]
+            if supermarket_start > change_start:
+                notes = notes + f"<br>from {supermarket_start:%B %Y} (data starts later)"
+            change_fig.add_trace(go.Bar(
+                x=data["Change"],
+                y=data["Category"],
+                orientation="h",
+                name=supermarket_name,
+                # Less reliable bars are lighter
+                marker={
+                    "color": colours.get(supermarket_name),
+                    "opacity": np.where(data["LowReliability"], 0.35, 1).tolist()
+                },
+                customdata=list(zip(data["Products"].round(0).astype(int), notes)),
+                hovertemplate=(
+                    f"{supermarket_name}: %{{x:+.1f}}%"
+                    "<br>on average %{customdata[0]:,.0f} comparable products per month"
+                    "%{customdata[1]}<extra></extra>"
+                )
+            ))
+
+        change_fig.update_layout(
+            title=(
+                f"Price change per food category, {change_start:%B %Y} to {change_end:%B %Y}"
+            ),
+            barmode="group",
+            xaxis_title="Price change of the same products (%)",
+            yaxis={"categoryorder": "array", "categoryarray": order[::-1], "title": None},
+            legend_title="Supermarket",
+            height=max(450, 45 * len(order)),
+            bargap=0.25
+        )
+        change_fig.add_vline(x=0, line_width=1, line_color="#888780")
+
+        # Supermarkets whose data starts after the start of the date range
+        late_starters = (
+            category_changes.groupby("SupermarketName")["StartMonth"].first()
+        )
+        late_starters = late_starters[late_starters > change_start]
+        if not late_starters.empty:
+            st.caption(
+                "Shorter period, because the data starts later: "
+                + ", ".join(f"{name} (from {month:%B %Y})" for name, month in late_starters.items())
+                + ". Its bars cannot be compared one-to-one with the other supermarkets."
+            )
+
+        st.plotly_chart(change_fig, use_container_width=True)
+
+        st.caption(
+            "Each bar shows how much the prices of the same products in a food category "
+            "changed over the period, at each supermarket: +5% means 5% more expensive. "
+            "The period follows the date range in the sidebar. A supermarket whose data "
+            "starts later covers a shorter period, from its first month with data. Lighter "
+            f"bars are based on fewer than {db.MIN_COMPARABLE_PRODUCTS} comparable products "
+            "per month."
+        )
+
 # ECONOMY PAGE
 # Shows the monthly CPI, inflation and household income from the economy statistics
 
