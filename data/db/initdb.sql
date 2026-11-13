@@ -7,12 +7,21 @@ CREATE TABLE Supermarkets (
   marketshare NUMERIC(3,2)
 );
 
+-- Shared product categories, filled by code/importer/categories/category_importer.py
+CREATE TABLE Categories (
+  categoryId SERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  isFood BOOLEAN NOT NULL,
+  description TEXT
+);
+
 CREATE TABLE Products (
   productId TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   isBasketProduct BOOLEAN,
   brand TEXT NOT NULL,
   category TEXT NOT NULL,
+  categoryId INTEGER REFERENCES Categories(categoryId),
   description TEXT,
   quantity_value NUMERIC,
   quantity_units TEXT

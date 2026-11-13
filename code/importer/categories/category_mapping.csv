@@ -1,0 +1,196 @@
+supermarket,level_1,level_2,level_3,shared_category
+AH,Baby en kind,,,Drogisterij & verzorging
+AH,Baby en kind,Babyvoeding,,Babyvoeding
+AH,Baby en kind,Dreumes- en peutervoeding,,Babyvoeding
+AH,Baby en kind,Flesvoeding,,Babyvoeding
+AH,Bakkerij,,,Brood & gebak
+AH,Bakkerij,Bakproducten,,"Ontbijt, beleg & bakproducten"
+AH,Bakkerij,"Crackers, beschuit",,"Ontbijt, beleg & bakproducten"
+AH,"Bier, wijn, aperitieven",,,"Bier, wijn & sterke drank"
+AH,"Borrel, chips, snacks",,,"Chips, noten & borrelsnacks"
+AH,"Borrel, chips, snacks",Brood- en toastsalades,,Maaltijden & salades
+AH,"Borrel, chips, snacks",Droge worst,,Vleeswaren
+AH,Diepvries,,,Diepvries & ijs
+AH,Diepvries,Diepvries fruit,,"Groente, aardappelen & fruit"
+AH,Diepvries,Diepvries groente,,"Groente, aardappelen & fruit"
+AH,Diepvries,Diepvries halal,,Vlees & kip
+AH,Diepvries,Diepvries hondenvoeding,,Huisdier
+AH,Diepvries,Diepvries maaltijden,,Maaltijden & salades
+AH,Diepvries,Diepvries pizza,,Maaltijden & salades
+AH,Diepvries,"Diepvries vlees, vis",,Vlees & kip
+AH,Diepvries,Vakslager vlees,,Vlees & kip
+AH,Drogisterij,,,Drogisterij & verzorging
+AH,"Frisdrank, sappen, water",,,"Frisdrank, sappen & water"
+AH,"Fruit, verse sappen",,,"Groente, aardappelen & fruit"
+AH,"Fruit, verse sappen",Verse sappen en smoothies,,"Frisdrank, sappen & water"
+AH,Gezondheid en sport,,,Drogisterij & verzorging
+AH,Gezondheid en sport,Dieetvoeding,,Sport- & dieetvoeding
+AH,Gezondheid en sport,Sportvoeding,,Sport- & dieetvoeding
+AH,Glutenvrij,,,Overig voeding
+AH,Glutenvrij,Glutenvrij bier,,"Bier, wijn & sterke drank"
+AH,Glutenvrij,Glutenvrij ontbijt,,"Ontbijt, beleg & bakproducten"
+AH,Glutenvrij,Glutenvrije bakproducten,,"Ontbijt, beleg & bakproducten"
+AH,Glutenvrij,"Glutenvrije chips, zoutjes",,"Chips, noten & borrelsnacks"
+AH,Glutenvrij,Glutenvrije diepvries,,Diepvries & ijs
+AH,Glutenvrij,Glutenvrije smaakmakers,,"Soepen, sauzen, kruiden & conserven"
+AH,Glutenvrij,Glutenvrije tussendoortjes,,"Ontbijt, beleg & bakproducten"
+AH,Glutenvrij,Glutenvrije wereldkeuken,,"Pasta, rijst & wereldkeuken"
+AH,"Groente, aardappelen",,,"Groente, aardappelen & fruit"
+AH,Huisdier,,,Huisdier
+AH,Huishouden,,,Huishouden
+AH,Kaas,,,Kaas
+AH,"Koek, snoep, chocolade",,,"Koek, snoep & chocolade"
+AH,"Koffie, thee",,,Koffie & thee
+AH,"Koken, tafelen, vrije tijd",,,Overig non-food
+AH,"Maaltijden, salades",,,Maaltijden & salades
+AH,"Ontbijtgranen, beleg",,,"Ontbijt, beleg & bakproducten"
+AH,Pasen,,,Brood & gebak
+AH,"Pasta, rijst, wereldkeuken",,,"Pasta, rijst & wereldkeuken"
+AH,"Soepen, sauzen, kruiden, olie",,,"Soepen, sauzen, kruiden & conserven"
+AH,Tussendoortjes,,,"Ontbijt, beleg & bakproducten"
+AH,Tussendoortjes,Proteïnerepen,,Sport- & dieetvoeding
+AH,Tussendoortjes,Warm tussendoor,,Maaltijden & salades
+AH,"Vegetarisch, vegan en plantaardig",,,Vegetarisch & vegan
+AH,"Vegetarisch, vegan en plantaardig",Hummus,,Maaltijden & salades
+AH,"Vegetarisch, vegan en plantaardig",Plantaardige kaas,,Kaas
+AH,"Vegetarisch, vegan en plantaardig",Plantaardige spreads,,"Ontbijt, beleg & bakproducten"
+AH,"Vegetarisch, vegan en plantaardig",Plantaardige zuivel alternatieven,,Zuivel & eieren
+AH,"Vegetarisch, vegan en plantaardig",Vegetarische spreads,,Maaltijden & salades
+AH,Vis,,,Vis
+AH,Vis,Visconserven,,"Soepen, sauzen, kruiden & conserven"
+AH,Vis,Vis sauzen,,"Soepen, sauzen, kruiden & conserven"
+AH,Vlees,,,Vlees & kip
+AH,Vlees,Vleesconserven,,"Soepen, sauzen, kruiden & conserven"
+AH,Vlees,Vleessauzen (vers),,"Soepen, sauzen, kruiden & conserven"
+AH,Vlees,"Ovenschotel vlees, kip",,Maaltijden & salades
+AH,Vleeswaren,,,Vleeswaren
+AH,"Zuivel, eieren",,,Zuivel & eieren
+AH,"Zuivel, eieren",Koffiemelk,,Koffie & thee
+Jumbo,"Aardappelen, groente en fruit",,,"Groente, aardappelen & fruit"
+Jumbo,"Aardappelen, groente en fruit",Verse sappen en smoothies,,"Frisdrank, sappen & water"
+Jumbo,Bier en wijn,,,"Bier, wijn & sterke drank"
+Jumbo,Bijzondere promoties,,,Brood & gebak
+Jumbo,Brood en gebak,,,Brood & gebak
+Jumbo,"Conserven, soepen, sauzen, oliën",,,"Soepen, sauzen, kruiden & conserven"
+Jumbo,"Conserven, soepen, sauzen, oliën",Pastasauzen,,"Pasta, rijst & wereldkeuken"
+Jumbo,Diepvries,,,Diepvries & ijs
+Jumbo,Diepvries,Babyvoeding,,Babyvoeding
+Jumbo,Diepvries,Dierenvoeding,,Huisdier
+Jumbo,Diepvries,Fruit,,"Groente, aardappelen & fruit"
+Jumbo,Diepvries,Groente,,"Groente, aardappelen & fruit"
+Jumbo,Diepvries,Maaltijden,,Maaltijden & salades
+Jumbo,Diepvries,Pizza,,Maaltijden & salades
+Jumbo,Diepvries,Vis,,Vis
+Jumbo,Diepvries,Vlees en gevogelte,,Vlees & kip
+Jumbo,Drogisterij en baby,,,Drogisterij & verzorging
+Jumbo,Drogisterij en baby,Babyvoeding,,Babyvoeding
+Jumbo,Frisdrank en sappen,,,"Frisdrank, sappen & water"
+Jumbo,Huishouden en dieren,,,Huishouden
+Jumbo,Huishouden en dieren,Huisdieren,,Huisdier
+Jumbo,"Koek, snoep, chocolade en chips",,,"Koek, snoep & chocolade"
+Jumbo,"Koek, snoep, chocolade en chips",Chips en popcorn,,"Chips, noten & borrelsnacks"
+Jumbo,"Koek, snoep, chocolade en chips",Noten en pinda's,,"Chips, noten & borrelsnacks"
+Jumbo,"Koek, snoep, chocolade en chips",Toastjes en zoutjes,,"Chips, noten & borrelsnacks"
+Jumbo,Koffie en thee,,,Koffie & thee
+Jumbo,Lokaal assortiment,,,Brood & gebak
+Jumbo,Non-food en servicebalie,,,Overig non-food
+Jumbo,"Ontbijt, broodbeleg en bakproducten",,,"Ontbijt, beleg & bakproducten"
+Jumbo,"Ontbijt, broodbeleg en bakproducten",Bewuste voeding,,Overig voeding
+Jumbo,"Ontbijt, broodbeleg en bakproducten",Sportvoeding,,Sport- & dieetvoeding
+Jumbo,Verse maaltijden en gemak,,,Maaltijden & salades
+Jumbo,Verse maaltijden en gemak,Verspakketten,,"Groente, aardappelen & fruit"
+Jumbo,"Vlees, vis en vega",,,Vlees & kip
+Jumbo,"Vlees, vis en vega",Vis,,Vis
+Jumbo,"Vlees, vis en vega",Vleesvervangers,,Vegetarisch & vegan
+Jumbo,"Vlees, vis en vega",Biologisch,Biologische vis,Vis
+Jumbo,"Vlees, vis en vega",Ovenschotels en schalen,,Maaltijden & salades
+Jumbo,"Vleeswaren, kaas en tapas",,,Vleeswaren
+Jumbo,"Vleeswaren, kaas en tapas","Broodsalades, hummus en spreads",,Maaltijden & salades
+Jumbo,"Vleeswaren, kaas en tapas","Chips, noten en toastjes",,"Chips, noten & borrelsnacks"
+Jumbo,"Vleeswaren, kaas en tapas",Kaas voor de borrel,,Kaas
+Jumbo,"Vleeswaren, kaas en tapas",Kaas voor de maaltijd,,Kaas
+Jumbo,"Vleeswaren, kaas en tapas",Kaas voor op brood,,Kaas
+Jumbo,"Vleeswaren, kaas en tapas","Olijven, dadels en vega-tapas",,"Chips, noten & borrelsnacks"
+Jumbo,"Vleeswaren, kaas en tapas","Sauzen, dips en tapenades",,"Chips, noten & borrelsnacks"
+Jumbo,"Vleeswaren, kaas en tapas",Vegetarische vleeswaren,,Vegetarisch & vegan
+Jumbo,"Vleeswaren, kaas en tapas",Vis tapas,,Vis
+Jumbo,"Wereldkeukens, kruiden, pasta en rijst",,,"Pasta, rijst & wereldkeuken"
+Jumbo,"Wereldkeukens, kruiden, pasta en rijst",Kruiden en specerijen,,"Soepen, sauzen, kruiden & conserven"
+Jumbo,"Zuivel, eieren, boter",,,Zuivel & eieren
+Jumbo,"Zuivel, eieren, boter",Ijskoffie,,Koffie & thee
+Plus,Aardappelen groente fruit,,,"Groente, aardappelen & fruit"
+Plus,Baby drogisterij,,,Drogisterij & verzorging
+Plus,Baby drogisterij,Babyvoeding,,Babyvoeding
+Plus,Bewuste voeding,,,Overig voeding
+Plus,Bewuste voeding,Natuurlijke biologische voeding,Ontbijt,"Ontbijt, beleg & bakproducten"
+Plus,Bewuste voeding,Natuurlijke biologische voeding,Tussendoor,"Ontbijt, beleg & bakproducten"
+Plus,Bewuste voeding,Sportvoeding afslankvoeding,,Sport- & dieetvoeding
+Plus,Brood gebak bakproducten,,,Brood & gebak
+Plus,Brood gebak bakproducten,Bakproducten,,"Ontbijt, beleg & bakproducten"
+Plus,Diepvries,,,Diepvries & ijs
+Plus,Diepvries,Diepvries dierenvoeding,,Huisdier
+Plus,Diepvries,Diepvries fruit,,"Groente, aardappelen & fruit"
+Plus,Diepvries,Diepvries groente,,"Groente, aardappelen & fruit"
+Plus,Diepvries,Diepvries maaltijden,,Maaltijden & salades
+Plus,Diepvries,Diepvries pizza,,Maaltijden & salades
+Plus,Diepvries,Diepvries vlees diepvries vis,,Vlees & kip
+Plus,Frisdrank sappen koffie thee,,,"Frisdrank, sappen & water"
+Plus,Frisdrank sappen koffie thee,Koffie koffiemelk suiker,,Koffie & thee
+Plus,Frisdrank sappen koffie thee,Thee,,Koffie & thee
+Plus,Huisdier,,,Huisdier
+Plus,Huishouden,,,Huishouden
+Plus,Kaas vleeswaren tapas,,,Vleeswaren
+Plus,Kaas vleeswaren tapas,Kaas,,Kaas
+Plus,Kaas vleeswaren tapas,Salades,,Maaltijden & salades
+Plus,Kaas vleeswaren tapas,Tapas smeersels,,"Chips, noten & borrelsnacks"
+Plus,Kerstassortiment,,,Overig voeding
+Plus,Koken non-food service,,,Overig non-food
+Plus,Koken non-food service,Optiek,,Drogisterij & verzorging
+Plus,Ontbijtgranen broodbeleg tussendoor,,,"Ontbijt, beleg & bakproducten"
+Plus,Paasassortiment,,,Overig voeding
+Plus,Pasta rijst internationale keuken,,,"Pasta, rijst & wereldkeuken"
+Plus,Pasta rijst internationale keuken,Antipasti tapas,,"Chips, noten & borrelsnacks"
+Plus,Snoep koek chocolade chips noten,,,"Koek, snoep & chocolade"
+Plus,Snoep koek chocolade chips noten,Chips zoutjes,,"Chips, noten & borrelsnacks"
+Plus,Snoep koek chocolade chips noten,Noten,,"Chips, noten & borrelsnacks"
+Plus,Snoep koek chocolade chips noten,Toast dipstokjes,,"Chips, noten & borrelsnacks"
+Plus,Soepen conserven sauzen smaakmakers,,,"Soepen, sauzen, kruiden & conserven"
+Plus,Verse kant-en-klaarmaaltijden,,,Maaltijden & salades
+Plus,Vlees kip vis vega,,,Vlees & kip
+Plus,Vlees kip vis vega,Schaaldieren schelpdieren,,Vis
+Plus,Vlees kip vis vega,Vega vleesvervangers,,Vegetarisch & vegan
+Plus,Vlees kip vis vega,Verse vleessauzen vissauzen,,"Soepen, sauzen, kruiden & conserven"
+Plus,Vlees kip vis vega,Vis,,Vis
+Plus,Vlees kip vis vega,Vis voor BBQ grill,,Vis
+Plus,Wijn bier sterke drank,,,"Bier, wijn & sterke drank"
+Plus,Zuivel eieren boter,,,Zuivel & eieren
+Lidl,Assortiment Pasta,,,"Pasta, rijst & wereldkeuken"
+Lidl,Assortiment kaas,,,Kaas
+Lidl,Assortiment koeken noten chips,,,"Koek, snoep & chocolade"
+Lidl,Assortiment sappen smoothies koffie thee,,,"Frisdrank, sappen & water"
+Lidl,Assortiment zuivel plantaardige en eieren,,,Zuivel & eieren
+Lidl,Baby,,,Drogisterij & verzorging
+Lidl,Bouwmarkt & tuin,,,Overig non-food
+Lidl,Eten & drinken,,,Overig voeding
+Lidl,Eten & drinken,Bier,,"Bier, wijn & sterke drank"
+Lidl,Eten & drinken,Brood & bakker,,Brood & gebak
+Lidl,Eten & drinken,Broodbeleg,,"Ontbijt, beleg & bakproducten"
+Lidl,Eten & drinken,Chips & snoep,,"Koek, snoep & chocolade"
+Lidl,Eten & drinken,Diepvries,,Diepvries & ijs
+Lidl,Eten & drinken,Dranken,,"Frisdrank, sappen & water"
+Lidl,Eten & drinken,Eieren & droogwaren,,"Pasta, rijst & wereldkeuken"
+Lidl,Eten & drinken,Fruit & groenten,,"Groente, aardappelen & fruit"
+Lidl,Eten & drinken,Huisdieren,,Huisdier
+Lidl,Eten & drinken,Kaas & Zuivel,,Zuivel & eieren
+Lidl,Eten & drinken,Kant-en-klaar maaltijden,,Maaltijden & salades
+Lidl,Eten & drinken,Koffie,,Koffie & thee
+Lidl,Eten & drinken,Vlees,,Vlees & kip
+Lidl,Keuken & huishouden,,,Overig non-food
+Lidl,Keuken & huishouden,Huishouden & schoonmaken,,Huishouden
+Lidl,Mode & accessoires,,,Overig non-food
+Lidl,Sport & vrije tijd,,,Overig non-food
+Lidl,Sport & vrije tijd,Gezondheid & wellness,,Drogisterij & verzorging
+Lidl,Sport & vrije tijd,Huisdieren,,Huisdier
+Lidl,Tapas,,,"Chips, noten & borrelsnacks"
+Lidl,Wonen & inrichting,,,Overig non-food
+Lidl,Wonen & inrichting,Beauty & verzorging,,Drogisterij & verzorging

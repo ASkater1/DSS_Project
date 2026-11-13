@@ -1,0 +1,31 @@
+priority,pattern,shared_category,explanation
+1,hunde|katzen|pet-food|pour chien|tiernahrung,Huisdier,Pet food
+2,babynahrung|säuglings|kleinkind|knijpfruit,Babyvoeding,Baby food
+3,nahrungsergänzung|bodybuilder|protein|proteïne|eiwit,Sport- & dieetvoeding,Supplements and protein products (not 'Proteinquellen' on plant-based burgers)
+4,hygiene|sonnenschutz|solare|\bhaar\b|petroleum jellies|kosmetik,Drogisterij & verzorging,Personal care
+5,heim & garten|haushalt,Overig non-food,Non-food
+6,\bbier|biere|\bwein|weine|cava|merlot|alkoholische getränke|alkoholischer|spirituosen|likör|sekt|aperitiv,"Bier, wijn & sterke drank",Beer and wine (also alcohol-free)
+7,speiseeis|eis am stiel|eisbecher|ice lollies|granite|tiefkühl-desserts|\beis\b,Diepvries & ijs,Ice cream
+8,meat alternatives|meat analogues|fleisch-ersatz|fleischersatz|fleischanaloga|tofu|vegetariane|veganistische,Vegetarisch & vegan,Meat substitutes (diet labels such as 'vegetarisch' are not used)
+9,fisch|meeresfrüchte|fishes|lachs|thunfisch|garnelen|gepaneerde vis|hering|matjes,Vis,Fish and seafood (also fish dishes)
+10,hummus,Maaltijden & salades,Hummus (grouped with sandwich salads as at AH and Jumbo)
+11,pizza|quiche|fertiggerichte|fertigsalate|fertigmahlzeit|meal kits|maaltijd|sandwiches|nudelgerichte|fleischgerichte|dumplings|festtagsessen|crêpes|galetten|verspakket,Maaltijden & salades,Ready meals and pizza
+12,schinken|salami|würste|wurst|würstchen|vleeswaren|rookworst|aufschnitt,Vleeswaren,Cold cuts and sausage
+13,fleisch|\bmeat\b|hühnchen|geflügel|schwein|\brind|chicken|pork|beef|nuggets|\bsate\b|gehackt|hackfleisch,Vlees & kip,Meat and poultry
+14,(?=.*pommes)(?=.*tiefkühl)|frytki|kroketten|croquettes|bitterballen|snack deep fried|frittierte,Diepvries & ijs,Frozen fries and frozen snacks
+15,pflanzenöle|olivenöl|speiseöl|erdnussöl|sonnenblumenöl|rapsöl|\böle\b,"Soepen, sauzen, kruiden & conserven",Cooking oil (before spreads so peanut oil is not a spread)
+16,schokolade|chocolade|chocolat|kakao|pralinen|süßwaren|bonbons|gummibonbons|kekse|kuchen|gebäck|riegel|waffeln|biscuits|\bkoek|drop|kauwgom|candybars|friandises|torroncini|süßer snack|süße kuchen|kinderkoekjes|thins,"Koek, snoep & chocolade",Biscuits sweets and chocolate
+17,käse|kaas|cheese|formaggini|fromage|filata,Kaas,Cheese (before spreads so cheese spreads count as cheese)
+18,brotaufstrich|aufstriche|konfitüre|marmelade|honig|nußbutter|nussbutter|erdnuss|ölsaaten-pürees|frühstück|cerealien|müsli|bread coverings|hagel|streusel|backhelfer|edible decorations,"Ontbijt, beleg & bakproducten",Spreads breakfast and baking
+19,chips|salzige snacks|nüsse|nuss|nusskerne|aperitiefhapjes|popcorn|oliven|vorspeisen|crackers|cracker|salzgebäck|tapas,"Chips, noten & borrelsnacks",Savoury snacks
+20,milch|joghurt|yogurt|yoghurt|quark|kwark|sahne|butter|margarine|streichfette|milchersatz|pflanzenmilch|haverdrink|dairy|zuivel|eier|eieren|pudding|vla|toetjes|desserts|milchnachspeisen,Zuivel & eieren,Dairy desserts and eggs
+21,brote|\bbrot|bakkerij|broodjes|bollen|viennoiseries|croissant|baguette|stol\b|pies,Brood & gebak,Bread and pastry
+22,teigwaren|nudeln|pasta|spirals|\breis|rice|getreidekörner|couscous|hülsenfrüchte|bohnen|linsen|tapioca|noodles|mie\b,"Pasta, rijst & wereldkeuken",Pasta rice and pulses
+23,eistee|ijsthee|fuze tea|teegetränke|tea drink,"Frisdrank, sappen & water",Iced tea
+24,"kaffee|koffie|\btee\b|\btees\b|heißgetränke zum aufgießen|thee|(^|, )süßstoffe(,|$)|koffiemelk",Koffie & thee,"Coffee, tea and sweeteners ('Getränke mit Süßstoff' and 'Gezuckerte Getränke' are soft drinks)"
+25,getränke|säfte|saft|nektar|wasser|limonade|cola|sirup|siroop|energy|juice|\bjus\b|boisson|infusion,"Frisdrank, sappen & water",Soft drinks and juices
+26,saucen|sauce|salsa|gewürz|würzmittel|suppen|brühe|bouillon|konserven|conserven|\böl|essig|kochhelfer|eingelegt|pflanzenfette|fette|sauzen|oliën,"Soepen, sauzen, kruiden & conserven",Sauces soups spices oil and canned food
+27,tiefkühl|diepvries|congelados|gefroren|frozen,Diepvries & ijs,Other frozen products
+28,frucht|früchte|obst|beeren|gemüse|kartoffel|tomaten|pilze|salat|spanac|green beans|dörrobst|getrocknete früchte|samen|keime|kerne,"Groente, aardappelen & fruit",Fruit vegetables potatoes and seeds
+29,imbiss|snack,"Chips, noten & borrelsnacks",Remaining snacks
+30,lebensmittel|groceries|food,Overig voeding,Food without a more specific label
