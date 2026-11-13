@@ -2,7 +2,7 @@
 
 ## Description
 
-This script downloads monthly economic indicators for the Netherlands from the CBS Open Data API and loads them into the PostgreSQL `EconomyStatistics` table. It stores one row per month, dated the 1st of that month, from January 2023 onwards.
+This script downloads monthly economic indicators for the Netherlands from the CBS Open Data API and loads them into the PostgreSQL `EconomyStatistics` table. It stores one row per month, dated the 1st of that month, from November 2022 onwards (the first month of the supermarket price data).
 
 The importer combines three CBS datasets:
 
@@ -25,15 +25,15 @@ CPI and wages use monthly periods (CBS keys such as `2024MM03`). CBS publishes h
 | `averageStandardizedIncome` | 83932NED | Average standardized income (*gestandaardiseerd inkomen*) for that month's year, in euros. It corrects for household size and composition. |
 | `yearlyWageIncrease` | 85663NED | Percentage change of collective wages per month, including special payments, compared with the same month a year earlier. It covers all cao sectors and all economic activities, and uses the current (not first-published) figures. |
 
-Available at the time of writing: CPI, CPI change and wage increase January 2023 – October 2026; income 2023–2025 (2025 is provisional).
+Available at the time of writing: CPI, CPI change and wage increase November 2022 – October 2026; income 2022–2025 (2025 is provisional).
 
 ## How the Values Are Derived
 
 **CPI base year.** The `CPI` column is a monthly index with **2015 = 100**: the average price level of 2015 is 100, so 135 means prices are 35 % higher than in 2015. CBS stopped publishing the 2015 = 100 series after December 2025 and continues it as 2025 = 100. For the months it still has, the importer uses the official 2015 = 100 figures. Later months are converted from the 2025 = 100 series, using the ratio of the averages over the months both series share (2025). This is the same factor CBS uses to convert between base years, about 1.3456. The base year is set by `CPI_BASE_YEAR` in the script.
 
-**CPI rates of change.** `CPIYearlyRateOfChange` compares each month with the same month a year earlier (the official CBS inflation figure). `CPIMonthlyRateOfChange` compares it with the previous month. Both are computed within a single CBS series that has both months, so the conversion between base years and rounding cannot distort them. The 2015 = 100 series is used first, so the rates match the stored `CPI`. The 2025 = 100 series only fills months the older series no longer covers. That is also why the importer downloads one extra year of CPI (2022). All 24 figures for 2025 match CBS's published *maandmutatie* and *jaarmutatie* (table 83131NED). For example, January 2023 shows 7.6 % on a year earlier and −1.4 % on the previous month.
+**CPI rates of change.** `CPIYearlyRateOfChange` compares each month with the same month a year earlier (the official CBS inflation figure). `CPIMonthlyRateOfChange` compares it with the previous month. Both are computed within a single CBS series that has both months, so the conversion between base years and rounding cannot distort them. The 2015 = 100 series is used first, so the rates match the stored `CPI`. The 2025 = 100 series only fills months the older series no longer covers. That is also why the importer downloads one extra year of CPI (2021 for a start in November 2022). All 24 figures for 2025 match CBS's published *maandmutatie* and *jaarmutatie* (table 83131NED). For example, January 2023 shows 7.6 % on a year earlier and −1.4 % on the previous month.
 
-**Start and end month.** Rows start in January of `START_YEAR` (2023). The CBS `Perioden ge` filter is only used to reduce the download, and the start year is also enforced in the code, because not every CBS table applies that filter reliably.
+**Start and end month.** Rows start in `START_MONTH` (November 2022), so the economy statistics start in the same month as the supermarket price data and can be compared with it from the first month. The CBS tables are downloaded from January of that year, because the `Perioden ge` filter works per year and is not applied reliably by every CBS table; months before the start month are then removed in the code.
 
 The last month is set by today's date in `get_latest_month`: it is the month before the current one. CBS publishes a month's figures during the following month, so the current month is never complete. Run on 11 November 2026, the importer fetches up to October 2026. If CBS has not published the previous month yet, the last available month is used.
 
@@ -48,7 +48,7 @@ The importer needs no local files. It downloads all data from `https://opendata.
 The configuration lives at the top of the script:
 
 * `CPI_BASE_YEAR`: base year of the stored CPI, currently `2015`.
-* `START_YEAR`: first year to import, currently `2023`. It can be overridden with the environment variable `ECONOMY_IMPORTER_START_YEAR`.
+* `START_MONTH`: first month to import, written as YYYY-MM, currently `2022-11`. It can be overridden with the environment variable `ECONOMY_IMPORTER_START_MONTH`, for example `ECONOMY_IMPORTER_START_MONTH=2023-01`.
 * `CBS_BASE_URL`: base URL of the CBS OData API.
 * `CPI_TABLE`, `INCOME_TABLE`, `WAGE_TABLE`: the CBS table IDs.
 * `INCOME_CONCEPTS`: the income concepts that are imported and the column each one fills.
@@ -100,7 +100,7 @@ The machine needs internet access to the CBS API.
 
 ## Comparison with the Stored Data
 
-Before writing, the importer reads the months already stored from `START_YEAR` onwards and compares them with the latest CBS data. A month is **outdated** when:
+Before writing, the importer reads the months already stored from `START_MONTH` onwards and compares them with the latest CBS data. A month is **outdated** when:
 
 * it is not in the database yet (a **new** month), or
 * at least one of its values differs from the latest CBS value (a **changed** month). This happens when CBS revises provisional figures, such as the latest income year. Two empty values count as equal.
@@ -120,7 +120,7 @@ Comparison with the database:
   Changed months: 0 []
 ```
 
-Months in the database that are not in the CBS data, such as rows from before `START_YEAR`, are left alone. The importer never deletes rows.
+Months in the database that are not in the CBS data, such as rows from before `START_MONTH`, are left alone. The importer never deletes rows.
 
 ## Database Transaction
 
