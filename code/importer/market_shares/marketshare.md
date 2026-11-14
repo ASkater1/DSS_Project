@@ -47,4 +47,4 @@ The combined market shares are:
 | 2024 | 77.2% |
 | 2025 | 77.4% |
 
-**Data source:** Annual Dutch food retail market shares, 2021–2025. Add the original source URL here.
+**Data source:** Annual Dutch food retail market shares, 2021–2025. Original source URL: https://www.fmcgopleidingen.nl/inzichten/marktaandelen-supermarkt-nielseniq/
