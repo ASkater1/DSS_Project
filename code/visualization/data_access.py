@@ -26,9 +26,6 @@ CACHE_TTL = 60 * 60
 # so it is kept longer
 LONG_CACHE_TTL = 6 * 60 * 60
 
-# Maximum number of products returned by the product search
-SEARCH_LIMIT = 200
-
 # PRICE INDEX SETTINGS
 # Price ratios (this month / previous month of the same product) outside these limits
 # are ignored as probable data errors or pack-size changes
@@ -38,7 +35,7 @@ MAX_PRICE_RATIO = 2.0
 # Months based on fewer comparable products than this are shown as less reliable
 MIN_COMPARABLE_PRODUCTS = 10
 
-# Name of the index over all food categories together
+# Name of the combined food row in the category-change chart
 ALL_FOOD = "All food"
 
 # Fallback for databases without shared categories (Categories table and
@@ -190,10 +187,14 @@ def load_municipalities() -> pd.DataFrame:
 # of those ratios (the logarithm of their geometric mean, the method CBS uses for the
 # CPI), the number of comparable products and how many of them changed price.
 # New products only count from their second month, so they do not cause jumps.
-@st.cache_data(ttl=LONG_CACHE_TTL, show_spinner="Calculating the price index from all price records (the first load can take up to a minute)...")
-def load_price_index_links() -> pd.DataFrame:
+@st.cache_data(ttl=LONG_CACHE_TTL, show_spinner="Calculating the price index from price records...")
+def load_price_index_links(product_names: tuple[str, ...] = ()) -> pd.DataFrame:
     category, category_join = category_sql()
     is_food = "COALESCE(c.isfood, false)" if category_join else "true"
+    product_filter = (
+        "AND productid IN (SELECT productid FROM products WHERE name = ANY(%(product_names)s))"
+        if product_names else ""
+    )
 
     links = run_query(f"""
         WITH product_month AS (
@@ -204,6 +205,7 @@ def load_price_index_links() -> pd.DataFrame:
                 avg(price) AS price
             FROM supermarketsproducts
             WHERE price > 0
+              {product_filter}
             GROUP BY supermarketid, productid, date_trunc('month', date)
         ),
         product_link AS (
@@ -230,7 +232,11 @@ def load_price_index_links() -> pd.DataFrame:
         {category_join}
         GROUP BY pl.month, s.name, 3, 4
         ORDER BY pl.month, s.name, 3
-    """, {"min_ratio": MIN_PRICE_RATIO, "max_ratio": MAX_PRICE_RATIO}, work_mem="512MB")
+    """, {
+        "min_ratio": MIN_PRICE_RATIO,
+        "max_ratio": MAX_PRICE_RATIO,
+        "product_names": list(product_names)
+    }, work_mem="512MB")
 
     links["Date"] = pd.to_datetime(links["Date"])
     links["IsFood"] = links["IsFood"].astype(bool)
@@ -238,8 +244,8 @@ def load_price_index_links() -> pd.DataFrame:
 
 
 
-# Function to turn the monthly links into a price index for one category (or ALL_FOOD)
-# and the selected supermarkets, compared with another series such as the CPI or wages.
+# Function to turn the monthly links into a price index for the selected categories
+# and supermarkets. An empty category selection includes every category.
 # The comparison series is a DataFrame with the columns Date and Value (any level, for
 # example the CPI with 2015 = 100).
 # The base month is the first month shown: the earliest month in the given links (so the
@@ -250,23 +256,24 @@ def load_price_index_links() -> pd.DataFrame:
 # at the level of the month before. Months without any data for a supermarket stay empty
 # (the chart connects the line).
 # Returns the price index and the comparison series rescaled to 100 in the base month.
-def chain_price_index(links: pd.DataFrame, category: str, supermarkets: list[str],
+def chain_price_index(links: pd.DataFrame, categories: tuple[str, ...], supermarkets: list[str],
                       comparison: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     selected = links[links["SupermarketName"].isin(supermarkets)]
 
-    if category == ALL_FOOD:
-        # The geometric mean over all food products: the category averages weighted
-        # by their number of comparable products
-        food = selected[selected["IsFood"]].copy()
-        food["WeightedLog"] = food["AvgLogRatio"].fillna(0) * food["Products"]
-        selected = food.groupby(["Date", "SupermarketName"], as_index=False)[
-            ["WeightedLog", "Products", "PriceChanges"]
-        ].sum()
-        selected["AvgLogRatio"] = np.where(
-            selected["Products"] > 0, selected["WeightedLog"] / selected["Products"].where(selected["Products"] > 0), np.nan
-        )
-    else:
-        selected = selected[selected["Category"] == category]
+    if categories:
+        selected = selected[selected["Category"].isin(categories)]
+
+    # Combine the chosen category averages, weighted by their comparable products.
+    selected = selected.copy()
+    selected["WeightedLog"] = selected["AvgLogRatio"].fillna(0) * selected["Products"]
+    selected = selected.groupby(["Date", "SupermarketName"], as_index=False)[
+        ["WeightedLog", "Products", "PriceChanges"]
+    ].sum()
+    selected["AvgLogRatio"] = np.where(
+        selected["Products"] > 0,
+        selected["WeightedLog"] / selected["Products"].where(selected["Products"] > 0),
+        np.nan
+    )
 
     columns = ["Date", "SupermarketName", "Index", "Products", "PriceChanges", "LowReliability"]
     if selected.empty:
@@ -352,12 +359,15 @@ def category_price_changes(links: pd.DataFrame, supermarkets: list[str]
     if period.empty:
         return pd.DataFrame(columns=columns), start_month, end_month
 
-    # All food: per month the category averages weighted by their comparable products
+    # All food: monthly averages weighted by comparable products
     period["WeightedLog"] = period["AvgLogRatio"].fillna(0) * period["Products"]
     all_food = period.groupby(["Date", "SupermarketName"], as_index=False)[
         ["WeightedLog", "Products"]
     ].sum()
-    all_food["AvgLogRatio"] = all_food["WeightedLog"] / all_food["Products"].where(all_food["Products"] > 0)
+    all_food["AvgLogRatio"] = (
+        all_food["WeightedLog"]
+        / all_food["Products"].where(all_food["Products"] > 0)
+    )
     all_food["Category"] = ALL_FOOD
     combined = pd.concat([period, all_food], ignore_index=True)
 
@@ -421,7 +431,6 @@ def load_monthly_basket_prices() -> pd.DataFrame:
     return to_numeric(basket, ["Price", "Products"])
 
 
-
 # Function to choose how products are grouped into categories: the shared
 # categories when the database has them, otherwise each supermarket's own
 # top-level category. Returns the SQL expression and the JOIN it needs.
@@ -455,10 +464,35 @@ def products_have_quantity() -> bool:
 
 
 
-# PRODUCT SEARCH: the latest known price of every product whose name matches
+# PRODUCT FILTER: names available in the selected shared categories. Empty means all.
 @st.cache_data(ttl=CACHE_TTL)
-def search_products(search_text: str, supermarket_names: tuple[str, ...]) -> pd.DataFrame:
-    if not search_text.strip() or not supermarket_names:
+def load_product_names(selected_categories: tuple[str, ...]) -> list[str]:
+    category, category_join = category_sql()
+    category_filter = (
+        f"{category} = ANY(%(categories)s)" if selected_categories else "true"
+    )
+
+    products = run_query(f"""
+        SELECT DISTINCT p.name AS "Name"
+        FROM products p
+        {category_join}
+        WHERE {category_filter}
+          AND p.name IS NOT NULL
+          AND trim(p.name) <> ''
+        ORDER BY p.name
+    """, {"categories": list(selected_categories)})
+    return products["Name"].tolist()
+
+
+# PRODUCT TABLE: latest known prices under the active sidebar filters. An empty
+# product_names tuple deliberately means all products in the selected categories.
+@st.cache_data(ttl=CACHE_TTL)
+def load_product_prices(
+    product_names: tuple[str, ...],
+    supermarket_names: tuple[str, ...],
+    selected_categories: tuple[str, ...]
+) -> pd.DataFrame:
+    if not supermarket_names:
         return pd.DataFrame(
             columns=["SupermarketName", "Name", "Quantity", "Category", "Price", "Date"]
         )
@@ -469,6 +503,11 @@ def search_products(search_text: str, supermarket_names: tuple[str, ...]) -> pd.
     )
 
     category, category_join = category_sql()
+    category_filter = (
+        f"{category} = ANY(%(categories)s)" if selected_categories else "true"
+    )
+    product_filter = "AND p.name = ANY(%(products)s)" if product_names else ""
+
     results = run_query(f"""
         SELECT
             s.name AS "SupermarketName",
@@ -477,12 +516,8 @@ def search_products(search_text: str, supermarket_names: tuple[str, ...]) -> pd.
             {category} AS "Category",
             latest.price AS "Price",
             latest.date AS "Date"
-        FROM (
-            SELECT * FROM products
-            WHERE name ILIKE %(pattern)s
-            ORDER BY name
-            LIMIT %(limit)s
-        ) p
+        FROM products p
+        {category_join}
         CROSS JOIN LATERAL (
             SELECT sp.supermarketid, sp.price, sp.date
             FROM supermarketsproducts sp
@@ -493,12 +528,13 @@ def search_products(search_text: str, supermarket_names: tuple[str, ...]) -> pd.
             LIMIT 1
         ) latest
         JOIN supermarkets s ON s.supermarketid = latest.supermarketid
-        {category_join}
+        WHERE {category_filter}
+          {product_filter}
         ORDER BY p.name, s.name
     """, {
-        "pattern": f"%{search_text.strip()}%",
-        "limit": SEARCH_LIMIT,
-        "supermarkets": list(supermarket_names)
+        "products": list(product_names),
+        "supermarkets": list(supermarket_names),
+        "categories": list(selected_categories)
     })
     results["Date"] = pd.to_datetime(results["Date"])
     return to_numeric(results, ["Price"])
