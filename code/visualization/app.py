@@ -114,9 +114,11 @@ def filter_by_date(dataframe, start_date, end_date):
 
 #Function to draw a price index chart: one line per supermarket and a grey comparison line
 #(such as the CPI or cao wages), all rescaled to 100 in the base month by chain_price_index()
-#in data_access.py.
+#in data_access.py. Supermarkets whose real price data ends early continue as a dashed
+#projection line (from project_price_index() in data_access.py).
 def draw_price_index_chart(price_index, comparison_index, selected_supermarkets, category,
-                           comparison_name, comparison_short, comparison_caption):
+                           comparison_name, comparison_short, comparison_caption,
+                           projection=None):
     if price_index.empty:
         st.info("No price data is available for this selection.")
         return
@@ -187,6 +189,19 @@ def draw_price_index_chart(price_index, comparison_index, selected_supermarkets,
             )
         ))
 
+    # Projection after the last month with real price data: a dashed line in the same
+    # colour, starting at the last real point so it connects to the solid line
+    projected = projection if projection is not None else pd.DataFrame()
+    for supermarket_name, data in (projected.groupby("SupermarketName") if not projected.empty else []):
+        fig.add_trace(go.Scatter(
+            x=data["Date"],
+            y=data["Index"],
+            mode="lines",
+            name=f"{supermarket_name} (projection)",
+            line={"color": colours.get(supermarket_name), "width": 2, "dash": "dash"},
+            hovertemplate=f"{supermarket_name} (projection): %{{y:.1f}}<extra></extra>"
+        ))
+
     fig.update_layout(
         title=f"Price index: {category.lower()} compared with {comparison_short} ({base_month:%B %Y} = 100)",
         xaxis_title="Month",
@@ -195,6 +210,16 @@ def draw_price_index_chart(price_index, comparison_index, selected_supermarkets,
         hovermode="x unified"
     )
     st.plotly_chart(fig, use_container_width=True)
+
+    projection_caption = ""
+    if not projected.empty:
+        last_real = projected.groupby("SupermarketName")["Date"].min()
+        projection_caption = (
+            " Dashed lines are projections, not data: after its last real price change ("
+            + ", ".join(f"{name} {month:%B %Y}" for name, month in last_real.items())
+            + ") a supermarket's line continues at its average monthly price change over "
+            f"the 12 months before, for at most {db.MAX_PROJECTION_MONTHS} months."
+        )
 
     st.caption(
         "The index shows how much the prices of the same products changed since the "
@@ -205,6 +230,7 @@ def draw_price_index_chart(price_index, comparison_index, selected_supermarkets,
         f"{db.MIN_COMPARABLE_PRODUCTS} comparable products. {comparison_caption} "
         "The base month is the first month shown; a supermarket whose data starts later "
         f"starts at the {comparison_short} level of its first month."
+        + projection_caption
     )
 
 
@@ -599,6 +625,10 @@ elif page == "Prices":
             }
         )
 
+    # Supermarkets whose real price data ends earlier are projected up to the last month
+    # with price data of any supermarket within the date range
+    projection_end = filter_by_date(price_index_links, prices_start, prices_end)["Date"].max()
+
     st.subheader("Price index compared with CPI")
 
 # Price index of the same products per supermarket, compared with the CPI, calculated in
@@ -611,6 +641,7 @@ elif page == "Prices":
     )
     draw_price_index_chart(
         price_index, cpi_index, selected_supermarkets, category_label,
+        projection=db.project_price_index(price_index, projection_end),
         comparison_name="CPI (all items)",
         comparison_short="CPI",
         comparison_caption=(
@@ -629,6 +660,7 @@ elif page == "Prices":
     )
     draw_price_index_chart(
         price_index, wage_index, selected_supermarkets, category_label,
+        projection=db.project_price_index(price_index, projection_end),
         comparison_name="Cao wages (estimate)",
         comparison_short="cao wages",
         comparison_caption=(
@@ -723,6 +755,20 @@ elif page == "Prices":
                 "Shorter period, because the data starts later: "
                 + ", ".join(f"{name} (from {month:%B %Y})" for name, month in late_starters.items())
                 + ". Its bars cannot be compared one-to-one with the other supermarkets."
+            )
+
+        # The bars only use real price data, so a supermarket whose last real price change
+        # is before the end of the date range covers a shorter period (no projections)
+        last_real_months = (
+            filtered_index_links[filtered_index_links["IsFood"]]
+            .groupby("SupermarketName")["Date"].max()
+        )
+        early_enders = last_real_months[last_real_months < change_end]
+        if not early_enders.empty:
+            st.caption(
+                "Shorter period, because the real price data ends earlier: "
+                + ", ".join(f"{name} (until {month:%B %Y})" for name, month in early_enders.items())
+                + ". The bars only use real price data, not the projections of the index charts."
             )
 
         st.plotly_chart(change_fig, use_container_width=True)
