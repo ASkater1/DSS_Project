@@ -468,9 +468,17 @@ elif page == "Prices":
     )
 
     with st.sidebar:
+        category_options = sorted(
+            available_index_links["Category"].dropna().unique().tolist()
+        )
+        if available_index_links["IsFood"].fillna(False).any():
+            category_options = [db.ALL_FOOD] + [
+                category for category in category_options
+                if category != db.ALL_FOOD
+            ]
         selected_categories = st.multiselect(
             "Select categories",
-            sorted(available_index_links["Category"].unique().tolist()),
+            category_options,
             default=[],
             placeholder="All categories — type to filter",
             filter_mode="contains",
@@ -498,10 +506,9 @@ elif page == "Prices":
     filtered_index_links = filter_by_date(
         filtered_index_links, prices_start, prices_end
     )
-    if selected_categories:
-        filtered_index_links = filtered_index_links[
-            filtered_index_links["Category"].isin(selected_categories)
-        ]
+    filtered_index_links = db.filter_selected_categories(
+        filtered_index_links, tuple(selected_categories)
+    )
 
     category_label = (
         "All categories" if not selected_categories
@@ -571,8 +578,9 @@ elif page == "Prices":
 
     st.subheader("Price comparison")
 
-# An empty product selection means all products in the active category and
-# supermarket filters. Selecting products restricts the table to those names.
+# An empty product selection means all linked product clusters in the active
+# category and supermarket filters. Selecting products restricts the table to
+# those cluster names.
     product_results = db.load_product_prices(
         tuple(selected_products), tuple(selected_supermarkets), tuple(selected_categories)
     )
@@ -580,23 +588,14 @@ elif page == "Prices":
     if product_results.empty:
         st.write("No products found for the selected filters.")
     else:
-# Hide the quantity column when the database has no product quantities
-        if product_results["Quantity"].isna().all():
-            product_results = product_results.drop(columns="Quantity")
-
-# Display the latest known price of every matching product
+# Display one row per linked product cluster and its latest price per supermarket
         st.dataframe(
-            product_results.rename(columns={
-                "SupermarketName": "Supermarket",
-                "Name": "Product",
-                "Price": "Latest price (€)",
-                "Date": "Price date"
-            }),
+            product_results,
             use_container_width=True,
             hide_index=True,
             column_config={
-                "Latest price (€)": st.column_config.NumberColumn(format="€%.2f"),
-                "Price date": st.column_config.DateColumn(format="YYYY-MM-DD")
+                supermarket: st.column_config.NumberColumn(format="€%.2f")
+                for supermarket in ["Albert Heijn", "Jumbo", "Lidl", "Plus"]
             }
         )
 
@@ -645,10 +644,12 @@ elif page == "Prices":
 
 # Percentage price change of the same products per food category and supermarket over
 # one common period (KPI: % price change per category of products), calculated in
-# data_access.py. This overview keeps all categories and follows only the date and
-# supermarket filters.
+# data_access.py. The calculation follows the active date, supermarket, category and
+# product filters.
     category_changes, change_start, change_end = db.category_price_changes(
-        available_index_links, selected_supermarkets
+        filtered_index_links,
+        selected_supermarkets,
+        include_all_food=db.ALL_FOOD in selected_categories
     )
 
     if category_changes.empty:
@@ -662,7 +663,8 @@ elif page == "Prices":
             .sort_values(ascending=False)
             .index.tolist()
         )
-        order = [db.ALL_FOOD] + order
+        if db.ALL_FOOD in set(category_changes["Category"]):
+            order = [db.ALL_FOOD] + order
 
         colours = dict(zip(supermarkets["Name"], px.colors.qualitative.Plotly))
         change_fig = go.Figure()

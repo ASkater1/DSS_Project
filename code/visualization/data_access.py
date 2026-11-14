@@ -191,9 +191,25 @@ def load_municipalities() -> pd.DataFrame:
 def load_price_index_links(product_names: tuple[str, ...] = ()) -> pd.DataFrame:
     category, category_join = category_sql()
     is_food = "COALESCE(c.isfood, false)" if category_join else "true"
+    individual_product_label = product_label_sql("p2")
     product_filter = (
-        "AND productid IN (SELECT productid FROM products WHERE name = ANY(%(product_names)s))"
+        """AND productid IN (
+            SELECT pcl.productid
+            FROM productclusterlinks pcl
+            JOIN productclusters pc ON pc.clusterid = pcl.clusterid
+            WHERE concat(pc.name, ' — ', pc.size) = ANY(%(product_names)s)
+              AND pcl.productid IS NOT NULL
+            UNION
+            SELECT p2.productid
+            FROM products p2
+            LEFT JOIN productclusterlinks pcl2 ON pcl2.productid = p2.productid
+            WHERE pcl2.productid IS NULL
+              AND {individual_product_label} = ANY(%(product_names)s)
+        )"""
         if product_names else ""
+    )
+    product_filter = product_filter.format(
+        individual_product_label=individual_product_label
     )
 
     links = run_query(f"""
@@ -259,9 +275,7 @@ def load_price_index_links(product_names: tuple[str, ...] = ()) -> pd.DataFrame:
 def chain_price_index(links: pd.DataFrame, categories: tuple[str, ...], supermarkets: list[str],
                       comparison: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     selected = links[links["SupermarketName"].isin(supermarkets)]
-
-    if categories:
-        selected = selected[selected["Category"].isin(categories)]
+    selected = filter_selected_categories(selected, categories)
 
     # Combine the chosen category averages, weighted by their comparable products.
     selected = selected.copy()
@@ -337,11 +351,14 @@ def chain_price_index(links: pd.DataFrame, categories: tuple[str, ...], supermar
 # (such as Lidl) covers its own, shorter period from its first month; its start month is
 # returned in StartMonth, so the chart can say so. The change is the product of the
 # monthly changes after the start month: (geometric mean ratio of month 1) x (month 2)
-# x ... - 1. Also returns ALL_FOOD (all food categories together) and the average number
-# of comparable products per month, to mark less reliable bars.
+# x ... - 1. When requested, it also returns ALL_FOOD (all food categories together).
+# The average number of comparable products per month marks less reliable bars.
 # Returns the changes and the start and end month of the period.
-def category_price_changes(links: pd.DataFrame, supermarkets: list[str]
-                           ) -> tuple[pd.DataFrame, pd.Timestamp | None, pd.Timestamp | None]:
+def category_price_changes(
+    links: pd.DataFrame,
+    supermarkets: list[str],
+    include_all_food: bool = False
+) -> tuple[pd.DataFrame, pd.Timestamp | None, pd.Timestamp | None]:
     columns = ["Category", "SupermarketName", "Change", "Products", "LowReliability", "StartMonth"]
     food = links[links["SupermarketName"].isin(supermarkets) & links["IsFood"]].copy()
     if food.empty:
@@ -359,17 +376,19 @@ def category_price_changes(links: pd.DataFrame, supermarkets: list[str]
     if period.empty:
         return pd.DataFrame(columns=columns), start_month, end_month
 
-    # All food: monthly averages weighted by comparable products
-    period["WeightedLog"] = period["AvgLogRatio"].fillna(0) * period["Products"]
-    all_food = period.groupby(["Date", "SupermarketName"], as_index=False)[
-        ["WeightedLog", "Products"]
-    ].sum()
-    all_food["AvgLogRatio"] = (
-        all_food["WeightedLog"]
-        / all_food["Products"].where(all_food["Products"] > 0)
-    )
-    all_food["Category"] = ALL_FOOD
-    combined = pd.concat([period, all_food], ignore_index=True)
+    combined = period
+    if include_all_food:
+        # All food: monthly averages weighted by comparable products
+        period["WeightedLog"] = period["AvgLogRatio"].fillna(0) * period["Products"]
+        all_food = period.groupby(["Date", "SupermarketName"], as_index=False)[
+            ["WeightedLog", "Products"]
+        ].sum()
+        all_food["AvgLogRatio"] = (
+            all_food["WeightedLog"]
+            / all_food["Products"].where(all_food["Products"] > 0)
+        )
+        all_food["Category"] = ALL_FOOD
+        combined = pd.concat([period, all_food], ignore_index=True)
 
     changes = combined.groupby(["Category", "SupermarketName"], as_index=False).agg(
         LogChange=("AvgLogRatio", lambda values: values.fillna(0).sum()),
@@ -450,6 +469,46 @@ def category_sql() -> tuple[str, str]:
     return TOP_CATEGORY_SQL, ""
 
 
+# Function to build the SQL category condition used by product queries. "All food"
+# is a virtual category that includes every category marked as food.
+def category_filter_sql(
+    category: str,
+    category_join: str,
+    selected_categories: tuple[str, ...]
+) -> tuple[str, list[str]]:
+    if not selected_categories:
+        return "true", []
+
+    regular_categories = [
+        selected for selected in selected_categories if selected != ALL_FOOD
+    ]
+    conditions = []
+    if regular_categories:
+        conditions.append(f"{category} = ANY(%(categories)s)")
+    if ALL_FOOD in selected_categories:
+        conditions.append("COALESCE(c.isfood, false)" if category_join else "true")
+    return "(" + " OR ".join(conditions) + ")", regular_categories
+
+
+# Function to apply the same category behavior to an already loaded DataFrame.
+def filter_selected_categories(
+    dataframe: pd.DataFrame,
+    selected_categories: tuple[str, ...]
+) -> pd.DataFrame:
+    if not selected_categories:
+        return dataframe
+
+    regular_categories = [
+        selected for selected in selected_categories if selected != ALL_FOOD
+    ]
+    included = pd.Series(False, index=dataframe.index)
+    if regular_categories:
+        included |= dataframe["Category"].isin(regular_categories)
+    if ALL_FOOD in selected_categories and "IsFood" in dataframe.columns:
+        included |= dataframe["IsFood"].fillna(False).astype(bool)
+    return dataframe.loc[included].copy()
+
+
 
 # Function to check whether the products table has the quantity columns
 # (databases created from an older initdb.sql do not have them)
@@ -463,78 +522,210 @@ def products_have_quantity() -> bool:
     return {"quantity_value", "quantity_units"} <= set(columns["column_name"])
 
 
+# Function to display an individual product together with its package size when
+# the database contains quantity columns. Products without a size keep their name.
+def product_label_sql(product_alias: str = "p") -> str:
+    if not products_have_quantity():
+        return f"{product_alias}.name"
 
-# PRODUCT FILTER: names available in the selected shared categories. Empty means all.
+    size = (
+        f"trim(concat_ws(' ', {product_alias}.quantity_value::float::text, "
+        f"{product_alias}.quantity_units))"
+    )
+    return (
+        f"concat({product_alias}.name, CASE WHEN NULLIF({size}, '') IS NOT NULL "
+        f"THEN concat(' — ', {size}) ELSE '' END)"
+    )
+
+
+
+# PRODUCT FILTER: linked cluster names and individual unlinked products available
+# in the selected shared categories. Empty means all products.
 @st.cache_data(ttl=CACHE_TTL)
 def load_product_names(selected_categories: tuple[str, ...]) -> list[str]:
     category, category_join = category_sql()
-    category_filter = (
-        f"{category} = ANY(%(categories)s)" if selected_categories else "true"
+    individual_product_label = product_label_sql()
+    category_filter, query_categories = category_filter_sql(
+        category, category_join, selected_categories
     )
 
     products = run_query(f"""
-        SELECT DISTINCT p.name AS "Name"
-        FROM products p
-        {category_join}
-        WHERE {category_filter}
-          AND p.name IS NOT NULL
-          AND trim(p.name) <> ''
-        ORDER BY p.name
-    """, {"categories": list(selected_categories)})
+        WITH product_names AS (
+            SELECT concat(pc.name, ' — ', pc.size) AS "Name"
+            FROM productclusters pc
+            JOIN productclusterlinks pcl ON pcl.clusterid = pc.clusterid
+            JOIN products p ON p.productid = pcl.productid
+            {category_join}
+            WHERE {category_filter}
+              AND pc.name IS NOT NULL
+              AND trim(pc.name) <> ''
+            UNION
+            SELECT {individual_product_label} AS "Name"
+            FROM products p
+            LEFT JOIN productclusterlinks pcl ON pcl.productid = p.productid
+            {category_join}
+            WHERE pcl.productid IS NULL
+              AND {category_filter}
+              AND p.name IS NOT NULL
+              AND trim(p.name) <> ''
+        )
+        SELECT DISTINCT "Name"
+        FROM product_names
+        ORDER BY "Name"
+    """, {"categories": query_categories})
     return products["Name"].tolist()
 
 
-# PRODUCT TABLE: latest known prices under the active sidebar filters. An empty
-# product_names tuple deliberately means all products in the selected categories.
+# PRODUCT TABLE: one row per linked product cluster plus one row per product that
+# is not linked. Prices are shown in a separate column for each supermarket.
+# An empty product_names tuple means all products in the selected categories.
 @st.cache_data(ttl=CACHE_TTL)
 def load_product_prices(
     product_names: tuple[str, ...],
     supermarket_names: tuple[str, ...],
     selected_categories: tuple[str, ...]
 ) -> pd.DataFrame:
+    output_columns = ["Product name", "Category", "Albert Heijn", "Jumbo", "Lidl", "Plus"]
     if not supermarket_names:
-        return pd.DataFrame(
-            columns=["SupermarketName", "Name", "Quantity", "Category", "Price", "Date"]
-        )
-
-    quantity_sql = (
-        "trim(concat_ws(' ', p.quantity_value::float::text, p.quantity_units))"
-        if products_have_quantity() else "NULL::text"
-    )
+        return pd.DataFrame(columns=output_columns)
 
     category, category_join = category_sql()
-    category_filter = (
-        f"{category} = ANY(%(categories)s)" if selected_categories else "true"
+    individual_product_label = product_label_sql()
+    category_filter, query_categories = category_filter_sql(
+        category, category_join, selected_categories
     )
-    product_filter = "AND p.name = ANY(%(products)s)" if product_names else ""
+    cluster_product_filter = (
+        "AND concat(pc.name, ' — ', pc.size) = ANY(%(products)s)"
+        if product_names else ""
+    )
+    individual_product_filter = (
+        f"AND {individual_product_label} = ANY(%(products)s)"
+        if product_names else ""
+    )
 
     results = run_query(f"""
+        WITH cluster_products AS (
+            SELECT
+                pc.clusterid,
+                concat(pc.name, ' — ', pc.size) AS name,
+                pc.declaredstorecount AS n_supermarkets,
+                pcl.supermarketid,
+                pcl.productid,
+                {category} AS category
+            FROM productclusters pc
+            JOIN productclusterlinks pcl ON pcl.clusterid = pc.clusterid
+            JOIN products p ON p.productid = pcl.productid
+            JOIN supermarkets selected_store
+              ON selected_store.supermarketid = pcl.supermarketid
+            {category_join}
+            WHERE {category_filter}
+              AND selected_store.name = ANY(%(supermarkets)s)
+              {cluster_product_filter}
+        ),
+        cluster_details AS (
+            SELECT
+                clusterid,
+                name,
+                max(n_supermarkets) AS n_supermarkets,
+                mode() WITHIN GROUP (ORDER BY category) AS category
+            FROM cluster_products
+            GROUP BY clusterid, name
+        ),
+        latest_prices AS (
+            SELECT DISTINCT ON (cp.clusterid, cp.supermarketid)
+                cp.clusterid,
+                cp.supermarketid,
+                sp.price
+            FROM cluster_products cp
+            JOIN supermarketsproducts sp
+              ON sp.productid = cp.productid
+             AND sp.supermarketid = cp.supermarketid
+            WHERE sp.price IS NOT NULL
+            ORDER BY cp.clusterid, cp.supermarketid, sp.date DESC, cp.productid
+        ),
+        linked_rows AS (
+            SELECT
+                cd.name,
+                cd.category,
+                cd.n_supermarkets,
+                max(lp.price) FILTER (WHERE lp.supermarketid = 1) AS ah_price,
+                max(lp.price) FILTER (WHERE lp.supermarketid = 2) AS jumbo_price,
+                max(lp.price) FILTER (WHERE lp.supermarketid = 3) AS lidl_price,
+                max(lp.price) FILTER (WHERE lp.supermarketid = 4) AS plus_price
+            FROM cluster_details cd
+            LEFT JOIN latest_prices lp ON lp.clusterid = cd.clusterid
+            GROUP BY cd.clusterid, cd.name, cd.category, cd.n_supermarkets
+        ),
+        individual_products AS (
+            SELECT
+                p.productid,
+                {individual_product_label} AS name,
+                {category} AS category
+            FROM products p
+            LEFT JOIN productclusterlinks pcl ON pcl.productid = p.productid
+            {category_join}
+            WHERE pcl.productid IS NULL
+              AND {category_filter}
+              {individual_product_filter}
+        ),
+        individual_latest AS (
+            SELECT
+                ip.productid,
+                ip.name,
+                ip.category,
+                s.supermarketid,
+                latest.price,
+                latest.date
+            FROM individual_products ip
+            JOIN supermarkets s ON s.name = ANY(%(supermarkets)s)
+            JOIN LATERAL (
+                SELECT sp.price, sp.date
+                FROM supermarketsproducts sp
+                WHERE sp.supermarketid = s.supermarketid
+                  AND sp.productid = ip.productid
+                  AND sp.price IS NOT NULL
+                ORDER BY sp.date DESC
+                LIMIT 1
+            ) latest ON true
+        ),
+        individual_store_rows AS (
+            SELECT DISTINCT ON (name, category, supermarketid)
+                name,
+                category,
+                supermarketid,
+                price
+            FROM individual_latest
+            ORDER BY name, category, supermarketid, date DESC, productid
+        ),
+        individual_rows AS (
+            SELECT
+                name,
+                category,
+                1 AS n_supermarkets,
+                max(price) FILTER (WHERE supermarketid = 1) AS ah_price,
+                max(price) FILTER (WHERE supermarketid = 2) AS jumbo_price,
+                max(price) FILTER (WHERE supermarketid = 3) AS lidl_price,
+                max(price) FILTER (WHERE supermarketid = 4) AS plus_price
+            FROM individual_store_rows
+            GROUP BY name, category, supermarketid
+        ),
+        all_rows AS (
+            SELECT * FROM linked_rows
+            UNION ALL
+            SELECT * FROM individual_rows
+        )
         SELECT
-            s.name AS "SupermarketName",
-            p.name AS "Name",
-            {quantity_sql} AS "Quantity",
-            {category} AS "Category",
-            latest.price AS "Price",
-            latest.date AS "Date"
-        FROM products p
-        {category_join}
-        CROSS JOIN LATERAL (
-            SELECT sp.supermarketid, sp.price, sp.date
-            FROM supermarketsproducts sp
-            JOIN supermarkets s2 ON s2.supermarketid = sp.supermarketid
-            WHERE sp.productid = p.productid
-              AND s2.name = ANY(%(supermarkets)s)
-            ORDER BY sp.date DESC
-            LIMIT 1
-        ) latest
-        JOIN supermarkets s ON s.supermarketid = latest.supermarketid
-        WHERE {category_filter}
-          {product_filter}
-        ORDER BY p.name, s.name
+            name AS "Product name",
+            category AS "Category",
+            ah_price AS "Albert Heijn",
+            jumbo_price AS "Jumbo",
+            lidl_price AS "Lidl",
+            plus_price AS "Plus"
+        FROM all_rows
+        ORDER BY n_supermarkets DESC, name
     """, {
         "products": list(product_names),
         "supermarkets": list(supermarket_names),
-        "categories": list(selected_categories)
+        "categories": query_categories
     })
-    results["Date"] = pd.to_datetime(results["Date"])
-    return to_numeric(results, ["Price"])
+    return to_numeric(results, ["Albert Heijn", "Jumbo", "Lidl", "Plus"])[output_columns]
