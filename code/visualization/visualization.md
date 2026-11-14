@@ -27,11 +27,10 @@ At build time the following file is expected in the directory code/visualization
 The data_access.py script also has variables that can be adapted beforehand:
 * CACHE_TTL: Number of seconds the results of the quick queries are kept in memory before the database is queried again.
 * LONG_CACHE_TTL: Number of seconds the result of the slow price index query is kept in memory.
-* SEARCH_LIMIT: Maximum number of products returned by the product search.
 * MIN_PRICE_RATIO and MAX_PRICE_RATIO: price ratios (this month's price divided by the previous one) outside these limits are ignored by the price index.
 * MIN_COMPARABLE_PRODUCTS: months based on fewer comparable products are shown as less reliable in the price index chart.
 
-The default values are 3600 (1 hour), 21600 (6 hours), 200, 0.5 and 2.0, and 10 respectively.
+The default values are 3600 (1 hour), 21600 (6 hours), 0.5 and 2.0, and 10 respectively.
 
 
 ## Dependencies
@@ -58,29 +57,30 @@ The following optional variable can also be configured:
 
 ## Code Structure
 The data_access.py script is organized into three main sections:
-* Imports and configuration: imports the necessary Python libraries and defines the cache durations, the search limit, the price index settings and the fallback SQL expression for top-level categories.
+* Imports and configuration: imports the necessary Python libraries and defines the cache durations, the price index settings and the fallback SQL expression for top-level categories.
 * Helper functions: opens the database connection, runs a query and returns the result as a DataFrame, and converts database decimals to numbers.
 * Data loading functions: one function per type of data used by the dashboard:
   * load_supermarkets(): supermarket IDs, names and market shares.
   * load_economy_statistics(): one row per month with the CPI, both CPI rates of change, the incomes and the wage increase.
   * load_municipalities(): population and supermarket accessibility per municipality.
   * load_price_index_links(): the monthly price change of the same products per supermarket and category, the basis of the price index.
-  * chain_price_index(): turns those monthly changes into a price index for one category (or All food) and the selected supermarkets, with 100 in the first month shown, and returns a comparison series (the CPI or cao wages, given as Date and Value) rescaled to the same base month. A supermarket whose data starts later starts at the comparison level of its first month.
+  * chain_price_index(): turns those monthly changes into a price index for the selected categories and supermarkets, with 100 in the first month shown, and returns a comparison series (the CPI or cao wages, given as Date and Value) rescaled to the same base month. With no categories selected, every category is included. A supermarket whose data starts later starts at the comparison level of its first month.
   * wage_level_from_yearly_increase(): builds a monthly cao wage level from the stored yearly cao wage increase, for the wage comparison chart.
   * category_price_changes(): calculates the percentage price change of the same products per food category and supermarket over the selected date range, for the price change per category chart. This function does not query the database, so changing the category or supermarkets is immediate.
   * load_monthly_basket_prices(): essential basket price per month and supermarket.
-  * search_products(): latest known price of every product whose name contains the search text.
+  * load_product_names(): product names available for the selected shared categories, or every product when the category filter is empty.
+  * load_product_prices(): latest known product prices under the active product, supermarket and category filters. Empty product or category selections do not restrict their respective fields.
 
 The app.py script is organized into two main sections:
 * Sidebar: the dashboard title, four page tiles (Overview, Prices, Economy, Municipalities) in a 2 x 2 grid and, below a Filters heading, the filters of the selected page.
 * Data loading: loads only the data the selected page needs through data_access.py, and stops with an error message if the database cannot be reached.
 * Dashboard pages: one section per page that adds its filters to the sidebar, filters the loaded data and builds the metrics, charts and tables.
 
-**Note: Page tiles**: The pages are chosen with four tiles at the top of the sidebar, each with an icon. The tile of the selected page is highlighted in the dashboard's accent colour (a Streamlit "primary" button); the other tiles are plain. The selected page is kept in st.session_state, so it stays selected when a filter changes, and the dashboard opens on Overview. Clicking a tile selects the page through an on_click callback before the page reruns, so the right tile is highlighted straight away. The tile size is set with a small CSS rule at the top of app.py; the icons are part of the tile labels, because the Streamlit version used (1.37) has no icon parameter on buttons.
+**Note: Page tiles**: The pages are chosen with four tiles at the top of the sidebar, each with an icon. The tile of the selected page is highlighted in the dashboard's accent colour (a Streamlit "primary" button); the other tiles are plain. The selected page is kept in st.session_state, so it stays selected when a filter changes, and the dashboard opens on Overview. Clicking a tile selects the page through an on_click callback before the page reruns, so the right tile is highlighted straight away. The tile size is set with a small CSS rule at the top of app.py, and the icons are included in the tile labels.
 
 **Note: Sidebar and filters**: Every filter is placed in the sidebar, below the page tiles, and only the filters of the selected page are shown:
 * Overview: date range.
-* Prices: date range, supermarkets and category. The product search stays on the page, next to its results.
+* Prices: date range, supermarkets, categories and products. Categories and products are multi-selects whose typed searches match name substrings. An empty category or product selection means no restriction for that field. Category and product selections filter the product table and recalculate the CPI and wage comparison indexes. The essential-basket metrics and price-development chart retain their basket scope, and the category-change chart remains an overview of all categories.
 * Economy: date range.
 * Municipalities: no filters.
 

@@ -459,21 +459,65 @@ elif page == "Prices":
 
 # Products are grouped into shared categories (see code/importer/categories), so the
 # same category can be compared between supermarkets. The list only contains the
-# categories of the selected supermarkets; "All food" combines all food categories.
-    filtered_index_links = price_index_links[
+# categories of the selected supermarkets. An empty selection includes every category.
+    available_index_links = price_index_links[
         price_index_links["SupermarketName"].isin(selected_supermarkets)
+    ]
+    available_index_links = filter_by_date(
+        available_index_links, prices_start, prices_end
+    )
+
+    with st.sidebar:
+        category_options = sorted(
+            available_index_links["Category"].dropna().unique().tolist()
+        )
+        if available_index_links["IsFood"].fillna(False).any():
+            category_options = [db.ALL_FOOD] + [
+                category for category in category_options
+                if category != db.ALL_FOOD
+            ]
+        selected_categories = st.multiselect(
+            "Select categories",
+            category_options,
+            default=[],
+            placeholder="All categories — type to filter",
+            filter_mode="contains",
+            key="price_categories"
+        )
+        selected_products = st.multiselect(
+            "Select products",
+            db.load_product_names(tuple(selected_categories)),
+            default=[],
+            placeholder="All products — type to filter",
+            filter_mode="contains",
+            key="price_products"
+        )
+
+# Recalculate only the CPI and wage index dataset from the active product and
+# category filters. Other visuals retain their original scope.
+    if selected_products:
+        visual_index_links = db.load_price_index_links(tuple(selected_products))
+    else:
+        visual_index_links = price_index_links
+
+    filtered_index_links = visual_index_links[
+        visual_index_links["SupermarketName"].isin(selected_supermarkets)
     ]
     filtered_index_links = filter_by_date(
         filtered_index_links, prices_start, prices_end
     )
+    filtered_index_links = db.filter_selected_categories(
+        filtered_index_links, tuple(selected_categories)
+    )
 
-    with st.sidebar:
-        selected_category = st.selectbox(
-            "Select category",
-            [db.ALL_FOOD] + sorted(filtered_index_links["Category"].unique().tolist())
-        )
+    category_label = (
+        "All categories" if not selected_categories
+        else selected_categories[0] if len(selected_categories) == 1
+        else f"{len(selected_categories)} selected categories"
+    )
 
-# Essential basket prices of the selected supermarkets
+# Essential basket metrics and price development are independent of the product
+# and category filters.
     filtered_basket = basket_prices_monthly[
         basket_prices_monthly["SupermarketName"].isin(selected_supermarkets)
     ]
@@ -509,7 +553,6 @@ elif page == "Prices":
     st.subheader("Price development over time")
 
 # Basket prices for each supermarket over time
-# This helps identify whether essential food products are becoming more expensive
     if filtered_basket.empty:
         st.info(
             "The essential basket price will appear here once basket products "
@@ -535,47 +578,26 @@ elif page == "Prices":
 
     st.subheader("Price comparison")
 
-# Add a search bar so users can find individual products more easily
-    search_product = st.text_input(
-        "Search for a product",
-        placeholder="Search for milk, bread, bananas..."
+# An empty product selection means all linked product clusters in the active
+# category and supermarket filters. Selecting products restricts the table to
+# those cluster names.
+    product_results = db.load_product_prices(
+        tuple(selected_products), tuple(selected_supermarkets), tuple(selected_categories)
     )
 
-# The search runs in the database: product names are matched without considering
-# capital letters, and partial product names can also be used
-    if search_product.strip():
-        search_results = db.search_products(
-            search_product, tuple(selected_supermarkets)
+    if product_results.empty:
+        st.write("No products found for the selected filters.")
+    else:
+# Display one row per linked product cluster and its latest price per supermarket
+        st.dataframe(
+            product_results,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                supermarket: st.column_config.NumberColumn(format="€%.2f")
+                for supermarket in ["Albert Heijn", "Jumbo", "Lidl", "Plus"]
+            }
         )
-
-        if search_results.empty:
-            st.write("No products found.")
-        else:
-            if len(search_results) >= db.SEARCH_LIMIT:
-                st.caption(
-                    f"Showing the first {db.SEARCH_LIMIT} matching products. "
-                    "Refine your search to see more specific results."
-                )
-
-# Hide the quantity column when the database has no product quantities
-            if search_results["Quantity"].isna().all():
-                search_results = search_results.drop(columns="Quantity")
-
-# Display the latest known price of every matching product
-            st.dataframe(
-                search_results.rename(columns={
-                    "SupermarketName": "Supermarket",
-                    "Name": "Product",
-                    "Price": "Latest price (€)",
-                    "Date": "Price date"
-                }),
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Latest price (€)": st.column_config.NumberColumn(format="€%.2f"),
-                    "Price date": st.column_config.DateColumn(format="YYYY-MM-DD")
-                }
-            )
 
     st.subheader("Price index compared with CPI")
 
@@ -584,11 +606,11 @@ elif page == "Prices":
 # The first month shown is the base month (100); a supermarket whose data starts later
 # starts at the CPI level of its first month.
     price_index, cpi_index = db.chain_price_index(
-        filtered_index_links, selected_category, selected_supermarkets,
+        filtered_index_links, tuple(selected_categories), selected_supermarkets,
         economyStatistics[["Date", "CPI"]].rename(columns={"CPI": "Value"})
     )
     draw_price_index_chart(
-        price_index, cpi_index, selected_supermarkets, selected_category,
+        price_index, cpi_index, selected_supermarkets, category_label,
         comparison_name="CPI (all items)",
         comparison_short="CPI",
         comparison_caption=(
@@ -602,11 +624,11 @@ elif page == "Prices":
 # The same price index, compared with collective (cao) wages. The wage line is built from
 # the stored yearly cao wage increase (YearlyWageIncrease), see data_access.py.
     price_index, wage_index = db.chain_price_index(
-        filtered_index_links, selected_category, selected_supermarkets,
+        filtered_index_links, tuple(selected_categories), selected_supermarkets,
         db.wage_level_from_yearly_increase(economyStatistics)
     )
     draw_price_index_chart(
-        price_index, wage_index, selected_supermarkets, selected_category,
+        price_index, wage_index, selected_supermarkets, category_label,
         comparison_name="Cao wages (estimate)",
         comparison_short="cao wages",
         comparison_caption=(
@@ -622,23 +644,27 @@ elif page == "Prices":
 
 # Percentage price change of the same products per food category and supermarket over
 # one common period (KPI: % price change per category of products), calculated in
-# data_access.py. This chart shows all food categories, so the category filter does
-# not apply to it; the date range and supermarket filters do.
+# data_access.py. The calculation follows the active date, supermarket, category and
+# product filters.
     category_changes, change_start, change_end = db.category_price_changes(
-        filtered_index_links, selected_supermarkets
+        filtered_index_links,
+        selected_supermarkets,
+        include_all_food=db.ALL_FOOD in selected_categories
     )
 
     if category_changes.empty:
         st.info("Not enough price data is available for this selection.")
     else:
-        # Categories from the largest to the smallest average change, with All food on top
+        # Categories from the largest to the smallest average change, with their
+        # combined result on top.
         order = (
             category_changes[category_changes["Category"] != db.ALL_FOOD]
             .groupby("Category")["Change"].mean()
             .sort_values(ascending=False)
             .index.tolist()
         )
-        order = [db.ALL_FOOD] + order
+        if db.ALL_FOOD in set(category_changes["Category"]):
+            order = [db.ALL_FOOD] + order
 
         colours = dict(zip(supermarkets["Name"], px.colors.qualitative.Plotly))
         change_fig = go.Figure()
