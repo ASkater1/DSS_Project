@@ -121,11 +121,22 @@ services:
           ignore:
             - "*.md"
             - "*.py"
+    # The dashboard starts last: it waits until the database is healthy and every importer
+    # that fills the data it shows has finished successfully. basket and modelling are not
+    # included yet, because the dashboard does not use their output.
     depends_on:
       database:
         condition: service_healthy
-      #static_importer:
-      #  condition: service_completed_successfully
+      static_importer:
+        condition: service_completed_successfully
+      static_municipalities_importer:
+        condition: service_completed_successfully
+      category_importer:
+        condition: service_completed_successfully
+      financial_importer:
+        condition: service_completed_successfully
+      live:
+        condition: service_completed_successfully
     ports:
       - '8501:8501'
     restart: always

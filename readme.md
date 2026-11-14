@@ -27,6 +27,14 @@ Some services like the data base can just be reused from publicly available imag
 2. Once running you can access your dashboard via http://localhost:8501
 >*The Development instance is configured in a Way, that allows it to rebuild/restart each container where a source code change was detected. You will need to keep the terminal running and can follow the log to see if your change was actually detected and the container rebuild.*
 
+### Start order of the containers
+The dashboard container is started last, so it never shows an empty database. It waits for:
+* the *database* to be healthy
+* the importers to be finished: *static_importer*, *static_municipalities_importer*, *category_importer*, *financial_importer* and *live*
+
+*basket* and *modelling* are not waited for yet, as the dashboard does not use their data.
+>*If one of the importers fails, the dashboard will not be started. Check the log of that importer with docker compose logs \<service name\>. You can still start the dashboard on its own with docker compose up -d --no-deps visualization.*
+
 ### Configuring the setup 
 #### (optional with make installed!)
 1. Run *make .env* to recreate a Environment variable set with the default values
