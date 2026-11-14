@@ -76,3 +76,11 @@ CREATE TABLE ProductClusterLinks (
 );
 
 CREATE INDEX productClusterLinks_clusterId_idx ON ProductClusterLinks(clusterId);
+
+-- Annual market shares of the four supermarkets (%)
+CREATE TABLE MarketShares (
+    supermarketId INTEGER REFERENCES Supermarkets(supermarketId),
+    year INTEGER NOT NULL,
+    marketShare NUMERIC(4,1) NOT NULL,
+    PRIMARY KEY (supermarketId, year)
+);

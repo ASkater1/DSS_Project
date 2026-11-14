@@ -8,6 +8,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
+import psycopg2
 
 import data_access as db
 
@@ -207,6 +208,29 @@ def draw_price_index_chart(price_index, comparison_index, selected_supermarkets,
         f"starts at the {comparison_short} level of its first month."
     )
 
+# Load annual supermarket market shares from PostgreSQL
+def load_market_shares():
+    conn = psycopg2.connect(
+        host=os.environ["DB_HOST"],
+        dbname=os.environ["DB_NAME"],
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"]
+    )
+
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT year, SUM(marketShare)
+                FROM MarketShares
+                GROUP BY year
+                ORDER BY year
+            """)
+            rows = cursor.fetchall()
+    finally:
+        conn.close()
+
+    return pd.DataFrame(rows, columns=["Year", "MarketShare"])
+
 
 # SIDEBAR
 # The dashboard has four pages, chosen with four tiles in the sidebar. Below the tiles
@@ -276,6 +300,9 @@ try:
     if page in ("Overview", "Prices"):
         supermarkets = db.load_supermarkets()
         basket_prices_monthly = db.load_monthly_basket_prices()
+
+    if page == "Overview":
+        market_shares = load_market_shares()
     if page in ("Overview", "Prices", "Economy"):
         economyStatistics = db.load_economy_statistics()
     if page == "Prices":
@@ -329,12 +356,27 @@ if page == "Overview":
             value=len(supermarkets)
         )
 
-# Market shares are only shown once they have been filled in the database
+# Show the market share for the latest available year in the selected date range
     with col2:
-        if supermarkets["MarketShare"].notna().any():
+        if overview_start is not None and overview_end is not None:
+            filtered_shares = market_shares[
+                (market_shares["Year"] >= overview_start.year) &
+                (market_shares["Year"] <= overview_end.year)
+            ]
+        else:
+            filtered_shares = market_shares.iloc[0:0]
+
+        if not filtered_shares.empty:
+            latest_year = filtered_shares["Year"].max()
+
+            share = filtered_shares.loc[
+                filtered_shares["Year"] == latest_year,
+                "MarketShare"
+            ].iloc[0]
+
             st.metric(
-                label="Combined market share",
-                value=f"{supermarkets['MarketShare'].sum():.0f}%"
+                label=f"Combined market share ({latest_year})",
+                value=f"{share:.1f}%"
             )
         else:
             st.metric(label="Combined market share", value="n/a")
