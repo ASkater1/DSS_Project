@@ -150,7 +150,7 @@ The dashboard is published on port 8501:
 ports:
   - '8501:8501'
 
-The dashboard depends on the PostgreSQL database being healthy before starting.
+The dashboard is the last container to start; the start order of all containers is described in readme.md and readme.txt in the project root.
 
 The dashboard uses restart: always because it is a continuously running service, unlike the importers.
 

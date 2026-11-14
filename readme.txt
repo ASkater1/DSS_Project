@@ -13,6 +13,14 @@ Running the dashboard
     1. Create the required environment file .env (Sample could be copied over from .env.sample)
     2. Run 'docker compose up --build' and the dashboard will open in http://localhost:8501
 
+Start order of the containers
+    The dashboard is started as the last container, so it does not show an empty database. It waits for:
+    -   database --> has to be healthy
+    -   static_importer, static_municipalities_importer, category_importer, financial_importer and live --> have to be finished
+    basket and modelling are not waited for yet, because the dashboard does not use their data.
+    If one of the importers fails, the dashboard will not start. Check the logs with 'docker compose logs <service name>'
+    or start only the dashboard with 'docker compose up -d --no-deps visualization'.
+
 Video link: No video has been created yet.
 Link to the codebase: https://github.com/ASkater1/DSS_Project (private)
 Dataset: Currently  the first dataset is still built into the front-end (certain things are still dummy data, other things fetched and processed). 
