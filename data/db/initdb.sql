@@ -56,3 +56,23 @@ CREATE TABLE EconomyStatistics (
   averageStandardizedIncome DECIMAL(10,1),  
   yearlyWageIncrease DECIMAL(4,1)           
 );
+
+CREATE TABLE ProductClusters (
+  clusterId TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  size TEXT NOT NULL,
+  declaredProductCount INTEGER NOT NULL CHECK (declaredProductCount > 0),
+  declaredStoreCount SMALLINT NOT NULL CHECK (declaredStoreCount > 0),
+  confidence TEXT NOT NULL
+);
+
+CREATE TABLE ProductClusterLinks (
+  clusterId TEXT NOT NULL REFERENCES ProductClusters(clusterId) ON DELETE CASCADE,
+  supermarketId INTEGER NOT NULL REFERENCES Supermarkets(supermarketId),
+  sourceProductId TEXT NOT NULL,
+  productId TEXT REFERENCES Products(productId) ON DELETE SET NULL,
+  PRIMARY KEY (supermarketId, sourceProductId),
+  UNIQUE (productId)
+);
+
+CREATE INDEX productClusterLinks_clusterId_idx ON ProductClusterLinks(clusterId);
