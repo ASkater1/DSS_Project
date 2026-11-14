@@ -142,6 +142,8 @@ services:
     depends_on:
       database:
         condition: service_healthy
+      market_shares_importer:
+        condition: service_completed_successfully
       static_importer:
         condition: service_completed_successfully
       static_municipalities_importer:
@@ -176,6 +178,18 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
+
+  market_shares_importer:
+    container_name: market_shares_importer
+    build: ./code/importer/market_shares/
+    env_file:
+      - .env
+    depends_on:
+      database:
+        condition: service_healthy
+      static_importer:
+        condition: service_completed_successfully
+    restart: "no"
 
     
 volumes:
