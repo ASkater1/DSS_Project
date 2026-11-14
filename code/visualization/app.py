@@ -11,20 +11,17 @@ import requests
 
 import data_access as db
 
-#Textual presets for date filters
 st.set_page_config(layout="wide")
 
 
-DATE_PRESETS = [
-    "All available dates",
-    "Custom range",
-]
-
-#Function to render a date range filter for each of the dashboard tabs
-#It returns the selected start and end dates as timestamps, or None if there is no date available
-#in the selection.
+#Function to render a date range filter for each of the dashboard pages
+#It shows a two-way slider (start date on the left, end date on the right) and, below it,
+#a start and an end date field that always show the selected dates and can also be typed in.
+#The slider and the date fields are kept in sync. By default the whole period of the data is
+#selected. It returns the selected start and end dates as timestamps, or None if there is no
+#date available in the selection.
 def render_date_filter(dataframes, key):
-    """Render a date range control and return the selected pandas timestamps."""
+    """Render a date range slider with start and end date fields and return the selected pandas timestamps."""
     date_values = [
         pd.to_datetime(dataframe["Date"], errors="coerce")
         for dataframe in dataframes
@@ -38,35 +35,69 @@ def render_date_filter(dataframes, key):
 
     minimum_date = valid_dates.min().date()
     maximum_date = valid_dates.max().date()
-    preset = st.selectbox("Date range", DATE_PRESETS, key=f"{key}_preset")
 
-    if preset == "Custom range":
-        start_col, end_col = st.columns(2)
-        with start_col:
-            start_date = st.date_input(
-                "Start date",
-                value=minimum_date,
-                min_value=minimum_date,
-                max_value=maximum_date,
-                key=f"{key}_start",
-            )
-        with end_col:
-            end_date = st.date_input(
-                "End date",
-                value=maximum_date,
-                min_value=minimum_date,
-                max_value=maximum_date,
-                key=f"{key}_end",
-            )
-    else:
-        start_date = minimum_date
-        end_date = maximum_date
+    slider_key = f"{key}_range"
+    start_key = f"{key}_start"
+    end_key = f"{key}_end"
+
+    # Start with the whole period; also reset when the stored dates fall outside the data
+    stored_range = st.session_state.get(slider_key)
+    if (
+        stored_range is None
+        or stored_range[0] < minimum_date
+        or stored_range[1] > maximum_date
+    ):
+        st.session_state[slider_key] = (minimum_date, maximum_date)
+        st.session_state[start_key] = minimum_date
+        st.session_state[end_key] = maximum_date
+
+    # Moving the slider updates the date fields
+    def slider_changed():
+        start, end = st.session_state[slider_key]
+        st.session_state[start_key] = start
+        st.session_state[end_key] = end
+
+    # Typing a date moves the slider (only when the start is on or before the end)
+    def date_fields_changed():
+        start = st.session_state[start_key] or minimum_date
+        end = st.session_state[end_key] or maximum_date
+        if start <= end:
+            st.session_state[slider_key] = (start, end)
+
+    st.slider(
+        "Date range",
+        min_value=minimum_date,
+        max_value=maximum_date,
+        format="YYYY-MM-DD",
+        key=slider_key,
+        on_change=slider_changed,
+    )
+
+    start_col, end_col = st.columns(2)
+    with start_col:
+        st.date_input(
+            "Start date",
+            min_value=minimum_date,
+            max_value=maximum_date,
+            key=start_key,
+            on_change=date_fields_changed,
+        )
+    with end_col:
+        st.date_input(
+            "End date",
+            min_value=minimum_date,
+            max_value=maximum_date,
+            key=end_key,
+            on_change=date_fields_changed,
+        )
+
+    start_date = st.session_state[start_key] or minimum_date
+    end_date = st.session_state[end_key] or maximum_date
 
     if start_date > end_date:
         st.error("The start date must be on or before the end date.")
         return None, None
 
-    st.caption(f"Showing data from {start_date:%Y-%m-%d} through {end_date:%Y-%m-%d}.")
     return pd.Timestamp(start_date), pd.Timestamp(end_date)
 
 #Filter to select the rows of the database that fall within the selected date range.
@@ -81,48 +112,199 @@ def filter_by_date(dataframe, start_date, end_date):
     ].copy()
 
 
-# Functions to fetch the data from the database.
+#Function to draw a price index chart: one line per supermarket and a grey comparison line
+#(such as the CPI or cao wages), all rescaled to 100 in the base month by chain_price_index()
+#in data_access.py.
+def draw_price_index_chart(price_index, comparison_index, selected_supermarkets, category,
+                           comparison_name, comparison_short, comparison_caption):
+    if price_index.empty:
+        st.info("No price data is available for this selection.")
+        return
+
+    # The base month is the first month shown for this category
+    base_month = price_index["Date"].min()
+
+    missing = sorted(set(selected_supermarkets) - set(price_index["SupermarketName"]))
+    if missing:
+        st.caption(f"No data for this category: {', '.join(missing)}.")
+
+    late_starters = price_index.groupby("SupermarketName")["Date"].min()
+    late_starters = late_starters[late_starters > base_month]
+    if not late_starters.empty:
+        st.caption(
+            f"Starts later, at the {comparison_short} level of its first month: "
+            + ", ".join(f"{name} ({month:%B %Y})" for name, month in late_starters.items())
+            + "."
+        )
+
+    # Fixed colour per supermarket, so a supermarket keeps its colour when filtering
+    colours = dict(zip(supermarkets["Name"], px.colors.qualitative.Plotly))
+
+    fig = go.Figure()
+
+    # Comparison line rescaled to 100 in the same base month
+    if comparison_index.empty:
+        st.caption(f"{comparison_name} is not available for {base_month:%B %Y}, so it is not shown.")
+    else:
+        fig.add_trace(go.Scatter(
+            x=comparison_index["Date"],
+            y=comparison_index["Index"],
+            mode="lines",
+            name=comparison_name,
+            line={"color": "#888780", "width": 4},
+            opacity=0.6,
+            hovertemplate=f"{comparison_name}: %{{y:.1f}}<extra></extra>"
+        ))
+
+    for supermarket_name, data in price_index.groupby("SupermarketName"):
+        notes = np.where(
+            data["LowReliability"],
+            f"<br>fewer than {db.MIN_COMPARABLE_PRODUCTS} comparable products",
+            ""
+        )
+        notes = notes + np.where(
+            (data["PriceChanges"] == 0) & (data["Products"] > 0),
+            "<br>no price changes this month",
+            ""
+        )
+        fig.add_trace(go.Scatter(
+            x=data["Date"],
+            y=data["Index"],
+            mode="lines+markers",
+            name=supermarket_name,
+            line={"color": colours.get(supermarket_name), "width": 2},
+            # Less reliable months get a lighter dot
+            marker={
+                "color": colours.get(supermarket_name),
+                "size": 6,
+                "opacity": np.where(data["LowReliability"], 0.3, 1).tolist()
+            },
+            customdata=list(zip(data["Products"].astype(int), notes)),
+            hovertemplate=(
+                f"{supermarket_name}: %{{y:.1f}}"
+                "<br>based on %{customdata[0]:,.0f} comparable products"
+                "%{customdata[1]}<extra></extra>"
+            )
+        ))
+
+    fig.update_layout(
+        title=f"Price index: {category.lower()} compared with {comparison_short} ({base_month:%B %Y} = 100)",
+        xaxis_title="Month",
+        yaxis_title=f"Index ({base_month:%b %Y} = 100)",
+        legend_title=f"Supermarket / {comparison_short}",
+        hovermode="x unified"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.caption(
+        "The index shows how much the prices of the same products changed since the "
+        "base month: 110 means 10% more expensive. Each month only products that also "
+        "had a price the month before are compared, so newly added products do not "
+        "cause jumps. A month without price changes keeps the level of the month "
+        "before. Lighter dots are based on fewer than "
+        f"{db.MIN_COMPARABLE_PRODUCTS} comparable products. {comparison_caption} "
+        "The base month is the first month shown; a supermarket whose data starts later "
+        f"starts at the {comparison_short} level of its first month."
+    )
+
+
+# SIDEBAR
+# The dashboard has four pages, chosen with four tiles in the sidebar. Below the tiles
+# the sidebar shows the filters of the selected page (added by each page further down).
+# Each page focuses on a different part of supermarket affordability or accessibility.
+PAGES = {
+    "Overview": ":material/dashboard:",
+    "Prices": ":material/sell:",
+    "Economy": ":material/trending_up:",
+    "Municipalities": ":material/map:",
+}
+
+# Hide the arrow that collapses the sidebar, so the sidebar always stays open,
+# and make the page buttons in the sidebar look like tiles
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebarCollapseButton"], [data-testid="collapsedControl"] {
+        display: none;
+    }
+    [data-testid="stSidebar"] [data-testid="stButton"] button {
+        min-height: 4.5rem;
+        border-radius: 0.75rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# The selected page is remembered between reruns; the dashboard opens on Overview
+if "page" not in st.session_state:
+    st.session_state.page = "Overview"
+
+
+# Function that runs when a tile is clicked: it selects that page before the rerun,
+# so the right tile is highlighted straight away
+def select_page(name):
+    st.session_state.page = name
+
+
+with st.sidebar:
+    st.title("Food Security Dashboard")
+    st.caption("Monitoring supermarket affordability and accessibility in the Netherlands")
+
+    # Four tiles in a 2 x 2 grid; the tile of the selected page is highlighted
+    tile_columns = st.columns(2)
+    for position, (name, icon) in enumerate(PAGES.items()):
+        with tile_columns[position % 2]:
+            # The icon is part of the label (Streamlit 1.37 has no icon parameter on buttons)
+            st.button(
+                f"{icon} {name}",
+                key=f"tile_{name}",
+                type="primary" if st.session_state.page == name else "secondary",
+                use_container_width=True,
+                on_click=select_page,
+                args=(name,)
+            )
+
+    st.divider()
+    st.subheader("Filters")
+
+page = st.session_state.page
+
+# Functions to fetch the data from the database. Only the data the selected page needs
+# is loaded, so pages without the slow price index open immediately.
 try:
-    supermarkets = db.load_supermarkets()
-    economyStatistics = db.load_economy_statistics()
-    municipalities = db.load_municipalities()
-    basket_prices_monthly = db.load_monthly_basket_prices()
-    category_prices_monthly = db.load_monthly_category_prices()
+    if page in ("Overview", "Prices"):
+        supermarkets = db.load_supermarkets()
+        basket_prices_monthly = db.load_monthly_basket_prices()
+    if page in ("Overview", "Prices", "Economy"):
+        economyStatistics = db.load_economy_statistics()
+    if page == "Prices":
+        price_index_links = db.load_price_index_links()
+    if page == "Municipalities":
+        municipalities = db.load_municipalities()
 
 #Exception handling for database connection issues, or data loading errors.
 except Exception as e:
     st.error(f"Could not load data from the database: {e}")
     st.stop()
 
-if municipalities.empty:
+if page == "Municipalities" and municipalities.empty:
     st.error(
         "No municipality data was found in the database. "
         "Run staticdata_loading_database_municipalities.py first."
     )
     st.stop()
 
-# Create the dashboard with four tabs
-# Each tab focuses on a different part of supermarket affordability or accessibility
-
-st.title("Food Security Dashboard")
-st.write("Monitoring supermarket affordability and accessibility in the Netherlands")
-
-tab1, tab2, tab3, tab4= st.tabs([
-    "Overview",
-    "Prices",
-    "Economy",
-    "Municipalities"
-])
-
-# OVERVIEW TAB
+# OVERVIEW PAGE
 # Shows general supermarket information, market shares and essential basket prices
 
-with tab1:
+if page == "Overview":
 
     st.header("Supermarket Overview")
-    overview_start, overview_end = render_date_filter(
-        [basket_prices_monthly, economyStatistics], "overview"
-    )
+    with st.sidebar:
+        overview_start, overview_end = render_date_filter(
+            [basket_prices_monthly, economyStatistics], "overview"
+        )
     filtered_overview_basket = filter_by_date(
         basket_prices_monthly, overview_start, overview_end
     )
@@ -257,20 +439,18 @@ with tab1:
             "income compared with the previous month."
         )
 
-# PRICES TAB
+# PRICES PAGE
 # Allows users to compare supermarket prices and monitor price development over time
 
-with tab2:
+elif page == "Prices":
     st.header("Supermarket Prices")
     st.write("Compare supermarket prices and monitor changes over time.")
-    prices_start, prices_end = render_date_filter(
-        [basket_prices_monthly, category_prices_monthly], "prices"
-    )
 
-# Filters
-    col1, col2 = st.columns(2)
-
-    with col1:
+# Filters (in the sidebar)
+    with st.sidebar:
+        prices_start, prices_end = render_date_filter(
+            [basket_prices_monthly, price_index_links], "prices"
+        )
         selected_supermarkets = st.multiselect(
             "Select supermarkets",
             supermarkets["Name"].tolist(),
@@ -279,18 +459,18 @@ with tab2:
 
 # Products are grouped into shared categories (see code/importer/categories), so the
 # same category can be compared between supermarkets. The list only contains the
-# categories of the selected supermarkets.
-    filtered_categories = category_prices_monthly[
-        category_prices_monthly["SupermarketName"].isin(selected_supermarkets)
+# categories of the selected supermarkets; "All food" combines all food categories.
+    filtered_index_links = price_index_links[
+        price_index_links["SupermarketName"].isin(selected_supermarkets)
     ]
-    filtered_categories = filter_by_date(
-        filtered_categories, prices_start, prices_end
+    filtered_index_links = filter_by_date(
+        filtered_index_links, prices_start, prices_end
     )
 
-    with col2:
+    with st.sidebar:
         selected_category = st.selectbox(
             "Select category",
-            ["All categories"] + sorted(filtered_categories["Category"].unique().tolist())
+            [db.ALL_FOOD] + sorted(filtered_index_links["Category"].unique().tolist())
         )
 
 # Essential basket prices of the selected supermarkets
@@ -397,51 +577,148 @@ with tab2:
                 }
             )
 
-    st.subheader("Average product price by category")
+    st.subheader("Price index compared with CPI")
 
-# Calculate the average product price per supermarket over time
-# This helps identify categories where prices are increasing
-    if selected_category == "All categories":
-        chart_data = filtered_categories.assign(
-            Total=filtered_categories["Price"] * filtered_categories["Products"]
-        ).groupby(["Date", "SupermarketName"], as_index=False)[["Total", "Products"]].sum()
-        chart_data["Price"] = chart_data["Total"] / chart_data["Products"]
+# Price index of the same products per supermarket, compared with the CPI, calculated in
+# data_access.py. Unlike an average price, it does not jump when products are added.
+# The first month shown is the base month (100); a supermarket whose data starts later
+# starts at the CPI level of its first month.
+    price_index, cpi_index = db.chain_price_index(
+        filtered_index_links, selected_category, selected_supermarkets,
+        economyStatistics[["Date", "CPI"]].rename(columns={"CPI": "Value"})
+    )
+    draw_price_index_chart(
+        price_index, cpi_index, selected_supermarkets, selected_category,
+        comparison_name="CPI (all items)",
+        comparison_short="CPI",
+        comparison_caption=(
+            "The grey line is the consumer price index (CPI, all goods and services, CBS), "
+            "rescaled to 100 in the same base month."
+        )
+    )
+
+    st.subheader("Price index compared with cao wages")
+
+# The same price index, compared with collective (cao) wages. The wage line is built from
+# the stored yearly cao wage increase (YearlyWageIncrease), see data_access.py.
+    price_index, wage_index = db.chain_price_index(
+        filtered_index_links, selected_category, selected_supermarkets,
+        db.wage_level_from_yearly_increase(economyStatistics)
+    )
+    draw_price_index_chart(
+        price_index, wage_index, selected_supermarkets, selected_category,
+        comparison_name="Cao wages (estimate)",
+        comparison_short="cao wages",
+        comparison_caption=(
+            "The grey line shows collective (cao) wages per month, including special "
+            "payments, for all sectors, rescaled to 100 in the same base month. It is an "
+            "estimate built from the yearly cao wage increase of each month: CBS raises cao "
+            "wages mostly in January and July, so the real wage level rises in steps, while "
+            "this line spreads each increase evenly over the year."
+        )
+    )
+
+    st.subheader("Price change per category")
+
+# Percentage price change of the same products per food category and supermarket over
+# one common period (KPI: % price change per category of products), calculated in
+# data_access.py. This chart shows all food categories, so the category filter does
+# not apply to it; the date range and supermarket filters do.
+    category_changes, change_start, change_end = db.category_price_changes(
+        filtered_index_links, selected_supermarkets
+    )
+
+    if category_changes.empty:
+        st.info("Not enough price data is available for this selection.")
     else:
-        chart_data = filtered_categories[
-            filtered_categories["Category"] == selected_category
-        ]
+        # Categories from the largest to the smallest average change, with All food on top
+        order = (
+            category_changes[category_changes["Category"] != db.ALL_FOOD]
+            .groupby("Category")["Change"].mean()
+            .sort_values(ascending=False)
+            .index.tolist()
+        )
+        order = [db.ALL_FOOD] + order
 
-    fig = px.line(
-        chart_data,
-        x="Date",
-        y="Price",
-        color="SupermarketName",
-        markers=True,
-        title=f"Average product price: {selected_category.lower()}",
-        hover_data=["Products"],
-        labels={
-            "Price": "Average price (€)",
-            "Date": "Month",
-            "SupermarketName": "Supermarket",
-            "Products": "Products"
-        }
-    )
+        colours = dict(zip(supermarkets["Name"], px.colors.qualitative.Plotly))
+        change_fig = go.Figure()
+        for supermarket_name in selected_supermarkets:
+            data = category_changes[category_changes["SupermarketName"] == supermarket_name]
+            if data.empty:
+                continue
+            data = data.set_index("Category").reindex(order).dropna(subset=["Change"]).reset_index()
+            notes = np.where(
+                data["LowReliability"],
+                f"<br>fewer than {db.MIN_COMPARABLE_PRODUCTS} comparable products",
+                ""
+            )
+            # A supermarket whose data starts later covers a shorter period
+            supermarket_start = data["StartMonth"].iloc[0]
+            if supermarket_start > change_start:
+                notes = notes + f"<br>from {supermarket_start:%B %Y} (data starts later)"
+            change_fig.add_trace(go.Bar(
+                x=data["Change"],
+                y=data["Category"],
+                orientation="h",
+                name=supermarket_name,
+                # Less reliable bars are lighter
+                marker={
+                    "color": colours.get(supermarket_name),
+                    "opacity": np.where(data["LowReliability"], 0.35, 1).tolist()
+                },
+                customdata=list(zip(data["Products"].round(0).astype(int), notes)),
+                hovertemplate=(
+                    f"{supermarket_name}: %{{x:+.1f}}%"
+                    "<br>on average %{customdata[0]:,.0f} comparable products per month"
+                    "%{customdata[1]}<extra></extra>"
+                )
+            ))
 
-    st.plotly_chart(fig, use_container_width=True)
+        change_fig.update_layout(
+            title=(
+                f"Price change per food category, {change_start:%B %Y} to {change_end:%B %Y}"
+            ),
+            barmode="group",
+            xaxis_title="Price change of the same products (%)",
+            yaxis={"categoryorder": "array", "categoryarray": order[::-1], "title": None},
+            legend_title="Supermarket",
+            height=max(450, 45 * len(order)),
+            bargap=0.25
+        )
+        change_fig.add_vline(x=0, line_width=1, line_color="#888780")
 
-    st.caption(
-        "Each product is averaged per month first; the chart shows the average "
-        "of those product prices."
-    )
+        # Supermarkets whose data starts after the start of the date range
+        late_starters = (
+            category_changes.groupby("SupermarketName")["StartMonth"].first()
+        )
+        late_starters = late_starters[late_starters > change_start]
+        if not late_starters.empty:
+            st.caption(
+                "Shorter period, because the data starts later: "
+                + ", ".join(f"{name} (from {month:%B %Y})" for name, month in late_starters.items())
+                + ". Its bars cannot be compared one-to-one with the other supermarkets."
+            )
 
-# ECONOMY TAB
+        st.plotly_chart(change_fig, use_container_width=True)
+
+        st.caption(
+            "Each bar shows how much the prices of the same products in a food category "
+            "changed over the period, at each supermarket: +5% means 5% more expensive. "
+            "The period follows the date range in the sidebar. A supermarket whose data "
+            "starts later covers a shorter period, from its first month with data. Lighter "
+            f"bars are based on fewer than {db.MIN_COMPARABLE_PRODUCTS} comparable products "
+            "per month."
+        )
+
+# ECONOMY PAGE
 # Shows the monthly CPI, inflation and household income from the economy statistics
 
-with tab3:
+elif page == "Economy":
     st.header("Citizen Economy")
-    economy_start, economy_end = render_date_filter(
-        [economyStatistics], "economy"
-    )
+    with st.sidebar:
+        economy_start, economy_end = render_date_filter(
+            [economyStatistics], "economy"
+        )
     filtered_economy = filter_by_date(
         economyStatistics, economy_start, economy_end
     )
@@ -517,9 +794,14 @@ with tab3:
         "income of its year. Months without published income are left empty."
     )
 
-with tab4:
+# MUNICIPALITIES PAGE
+# Shows supermarket accessibility in different Dutch municipalities
+
+elif page == "Municipalities":
 
     st.header("Supermarket Accessibility")
+    with st.sidebar:
+        st.caption("This page has no filters.")
 
     st.write("Explore supermarket accessibility across Dutch municipalities.")
 

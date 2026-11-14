@@ -4,7 +4,7 @@
 #
 # Downloads monthly economic indicators for the Netherlands from the CBS Open Data API
 # and loads them into the EconomyStatistics table (one row per month, dated the 1st),
-# starting in START_YEAR.
+# starting in START_MONTH.
 #
 #   83136NED  Consumentenprijzen; basisjaren vanaf 1969        -> CPI, CPIYearlyRateOfChange, CPIMonthlyRateOfChange (monthly)
 #   83932NED  Inkomen van huishoudens; huishoudenskenmerken   -> average gross, disposable and
@@ -38,8 +38,9 @@ CPI_TABLE = "83136NED"
 INCOME_TABLE = "83932NED"
 WAGE_TABLE = "85663NED"
 
-# First year to import (can be overridden with ECONOMY_IMPORTER_START_YEAR)
-START_YEAR = 2023
+# First month to import, as YYYY-MM (can be overridden with ECONOMY_IMPORTER_START_MONTH).
+# November 2022 is the first month of the supermarket price data.
+START_MONTH = "2022-11"
 
 # Base year of the stored CPI (this year's average = 100)
 CPI_BASE_YEAR = 2015
@@ -308,9 +309,14 @@ def get_latest_month(today: date | None = None) -> pd.Period:
 
 
 # Function to combine all sources into rows that match the EconomyStatistics table
-def load_economy_statistics(start_year: int = START_YEAR,
+def load_economy_statistics(start_month: pd.Period | None = None,
                             latest_month: pd.Period | None = None) -> pd.DataFrame:
+    start_month = start_month or pd.Period(START_MONTH, freq="M")
     latest_month = latest_month or get_latest_month()
+
+    # The CBS tables are downloaded per year; months before the start month are
+    # removed below
+    start_year = start_month.year
     monthly = (
         load_cpi(start_year)
         .join(load_wage_increase(start_year), how="outer")
@@ -318,10 +324,10 @@ def load_economy_statistics(start_year: int = START_YEAR,
     )
 
     # The CBS 'Perioden ge' filter only reduces the download and is not applied
-    # reliably by every table, so the start year is enforced here as well.
+    # reliably by every table, so the start month is enforced here.
     # Months after the latest month are left out.
     monthly = monthly[
-        (monthly.index.year >= start_year) & (monthly.index <= latest_month)
+        (monthly.index >= start_month) & (monthly.index <= latest_month)
     ].copy()
 
     # Income only exists per year: every month gets the value of its own year
@@ -360,7 +366,7 @@ def check_data_quality(df: pd.DataFrame):
 
 
 # Function to read the months that are currently stored in the database
-def load_stored_statistics(db_conn, start_year: int) -> pd.DataFrame:
+def load_stored_statistics(db_conn, start_month: pd.Period) -> pd.DataFrame:
     query = text(f"""
         SELECT {", ".join(final_columns)}
         FROM economystatistics
@@ -368,7 +374,7 @@ def load_stored_statistics(db_conn, start_year: int) -> pd.DataFrame:
         ORDER BY date
     """)
     with db_conn.connect() as conn:
-        stored = pd.read_sql(query, conn, params={"start_date": date(start_year, 1, 1)})
+        stored = pd.read_sql(query, conn, params={"start_date": date(start_month.year, start_month.month, 1)})
 
     # PostgreSQL returns DECIMAL values as Decimal objects; compare them as floats
     stored["date"] = pd.to_datetime(stored["date"]).dt.date
@@ -439,16 +445,16 @@ if __name__ == "__main__":
     db_user = os.environ["DB_USER"]
     db_password = os.environ["DB_PASSWORD"]
     db_port = os.environ.get("DB_PORT", "5432")
-    start_year = int(os.environ.get("ECONOMY_IMPORTER_START_YEAR", START_YEAR))
+    start_month = pd.Period(os.environ.get("ECONOMY_IMPORTER_START_MONTH", START_MONTH), freq="M")
 
     latest_month = get_latest_month()
 
     # Download, combine and validate the CBS data before touching the database
     print(
         f"Downloading monthly economy statistics from CBS, "
-        f"from {start_year}-01 up to {latest_month}..."
+        f"from {start_month} up to {latest_month}..."
     )
-    economy = load_economy_statistics(start_year, latest_month)
+    economy = load_economy_statistics(start_month, latest_month)
     if economy.empty:
         sys.exit("CBS returned no economy statistics. Import not performed.")
     check_data_quality(economy)
@@ -459,7 +465,7 @@ if __name__ == "__main__":
     )
 
     # Compare the latest CBS data with what is stored and keep only outdated months
-    stored = load_stored_statistics(db_conn, start_year)
+    stored = load_stored_statistics(db_conn, start_month)
     outdated = find_outdated_months(economy, stored)
     if outdated.empty:
         print("[INFO] Stored economy statistics are up to date. Nothing to import.")

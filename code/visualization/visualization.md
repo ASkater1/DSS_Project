@@ -4,10 +4,10 @@
 ## Description
 This service is responsible for displaying the Food Security Dashboard: the Streamlit website that can be opened in a web browser at http://localhost:8501.
 
-The dashboard reads all its data from the PostgreSQL database and presents it in four tabs:
+The dashboard reads all its data from the PostgreSQL database and presents it on four pages, chosen in a fixed sidebar on the left:
 · Overview: Shows the number of supermarket chains, their combined market share and the price of the essential basket per supermarket.
 
-· Prices: Allows users to compare supermarket prices, search for individual products and follow the average product price per category over time.
+· Prices: Allows users to compare supermarket prices, search for individual products and follow a price index per category over time.
 
 · Economy: Shows the monthly Consumer Price Index (CPI, 2015 = 100), the CPI change on the previous month and on a year earlier, and the average disposable income.
 
@@ -26,10 +26,12 @@ At build time the following file is expected in the directory code/visualization
 
 The data_access.py script also has variables that can be adapted beforehand:
 * CACHE_TTL: Number of seconds the results of the quick queries are kept in memory before the database is queried again.
-* LONG_CACHE_TTL: Number of seconds the result of the slow monthly category price query is kept in memory.
+* LONG_CACHE_TTL: Number of seconds the result of the slow price index query is kept in memory.
 * SEARCH_LIMIT: Maximum number of products returned by the product search.
+* MIN_PRICE_RATIO and MAX_PRICE_RATIO: price ratios (this month's price divided by the previous one) outside these limits are ignored by the price index.
+* MIN_COMPARABLE_PRODUCTS: months based on fewer comparable products are shown as less reliable in the price index chart.
 
-The default values are 3600 (1 hour), 21600 (6 hours) and 200 respectively.
+The default values are 3600 (1 hour), 21600 (6 hours), 200, 0.5 and 2.0, and 10 respectively.
 
 
 ## Dependencies
@@ -56,27 +58,64 @@ The following optional variable can also be configured:
 
 ## Code Structure
 The data_access.py script is organized into three main sections:
-* Imports and configuration: imports the necessary Python libraries and defines the cache durations, the search limit and the fallback SQL expression for top-level categories.
+* Imports and configuration: imports the necessary Python libraries and defines the cache durations, the search limit, the price index settings and the fallback SQL expression for top-level categories.
 * Helper functions: opens the database connection, runs a query and returns the result as a DataFrame, and converts database decimals to numbers.
 * Data loading functions: one function per type of data used by the dashboard:
   * load_supermarkets(): supermarket IDs, names and market shares.
   * load_economy_statistics(): one row per month with the CPI, both CPI rates of change, the incomes and the wage increase.
   * load_municipalities(): population and supermarket accessibility per municipality.
-  * load_monthly_category_prices(): average product price per month, supermarket and top-level category.
+  * load_price_index_links(): the monthly price change of the same products per supermarket and category, the basis of the price index.
+  * chain_price_index(): turns those monthly changes into a price index for one category (or All food) and the selected supermarkets, with 100 in the first month shown, and returns a comparison series (the CPI or cao wages, given as Date and Value) rescaled to the same base month. A supermarket whose data starts later starts at the comparison level of its first month.
+  * wage_level_from_yearly_increase(): builds a monthly cao wage level from the stored yearly cao wage increase, for the wage comparison chart.
+  * category_price_changes(): calculates the percentage price change of the same products per food category and supermarket over the selected date range, for the price change per category chart. This function does not query the database, so changing the category or supermarkets is immediate.
   * load_monthly_basket_prices(): essential basket price per month and supermarket.
   * search_products(): latest known price of every product whose name contains the search text.
 
 The app.py script is organized into two main sections:
-* Data loading: loads all data through data_access.py and stops with an error message if the database cannot be reached.
-* Dashboard tabs: one section per tab (Overview, Prices, Economy, Municipalities) that filters the loaded data and builds the metrics, charts and tables.
+* Sidebar: the dashboard title, four page tiles (Overview, Prices, Economy, Municipalities) in a 2 x 2 grid and, below a Filters heading, the filters of the selected page.
+* Data loading: loads only the data the selected page needs through data_access.py, and stops with an error message if the database cannot be reached.
+* Dashboard pages: one section per page that adds its filters to the sidebar, filters the loaded data and builds the metrics, charts and tables.
+
+**Note: Page tiles**: The pages are chosen with four tiles at the top of the sidebar, each with an icon. The tile of the selected page is highlighted in the dashboard's accent colour (a Streamlit "primary" button); the other tiles are plain. The selected page is kept in st.session_state, so it stays selected when a filter changes, and the dashboard opens on Overview. Clicking a tile selects the page through an on_click callback before the page reruns, so the right tile is highlighted straight away. The tile size is set with a small CSS rule at the top of app.py; the icons are part of the tile labels, because the Streamlit version used (1.37) has no icon parameter on buttons.
+
+**Note: Sidebar and filters**: Every filter is placed in the sidebar, below the page tiles, and only the filters of the selected page are shown:
+* Overview: date range.
+* Prices: date range, supermarkets and category. The product search stays on the page, next to its results.
+* Economy: date range.
+* Municipalities: no filters.
+
+The date range filter is the same render_date_filter() function on every page, placed in the sidebar; each page keeps its own date range.
+
+**Note: Date range filter**: The date range is chosen with a two-way slider: the left handle sets the start date and the right handle the end date. By default the slider covers the whole period of the data on that page (the first and the last month in the data). Below the slider, a Start date and an End date field always show the selected dates; a date can also be typed or picked from a calendar there. The slider and the two fields are kept in sync through on_change callbacks: moving the slider updates the fields, and typing a date moves the slider. When the typed start date is after the end date, an error is shown and the page shows no data until this is corrected. Streamlit forgets the state of filters that are not shown, so a page's date range returns to the whole period after switching to another page and back. The sidebar cannot be collapsed: a small CSS rule at the top of app.py hides Streamlit's collapse arrow, so the filters always stay visible. On narrow screens such as phones, Streamlit still shows the sidebar as a menu.
+
+The pages replace the tabs the dashboard used before. With tabs, Streamlit builds every tab at once and cannot tell the code which tab is open, so the sidebar could not show the filters of the open tab only.
 
 **Note: Caching**: Streamlit re-runs the complete app.py on every click, filter change or search. Every data loading function is therefore cached with st.cache_data, so the database is only queried again when the cache has expired (CACHE_TTL or LONG_CACHE_TTL). Without the cache, every interaction would run all queries again.
 
-**Note: Aggregation in the database**: The SupermarketsProducts table can contain millions of price records, which is far too much to send to the dashboard. The price functions therefore aggregate inside PostgreSQL and only return small summary tables (about 2,700 rows for the monthly category prices). The monthly category price query is given 512 MB of PostgreSQL work memory for that query only, which made it about 2.5 times faster.
+**Note: Aggregation in the database**: The SupermarketsProducts table can contain millions of price records, which is far too much to send to the dashboard. The price functions therefore aggregate inside PostgreSQL and only return small summary tables (about 2,800 rows for the price index). The price index query is given 512 MB of PostgreSQL work memory for that query only, which made it about 2.5 times faster.
 
-**Note: Monthly prices**: Each product is first averaged per month, and those product averages are then averaged per category, so that products that were recorded on more days do not count more heavily. This assumes that every product has a price record in every month. When the database only contains price changes (see the static importer), products whose price did not change during a month are missing from that month's average.
+**Note: Price index**: The Prices page shows a price index per category instead of an average price. An average price jumps whenever a supermarket's data suddenly contains more or different products (for example Jumbo in November 2024, when 6,000 cheaper products were added), even if no price changed. The index only compares the same products, in the same way CBS calculates the CPI:
+* Each product's prices are averaged per month.
+* Every month, each product's price is divided by its price in its previous month with a price. Ratios below MIN_PRICE_RATIO or above MAX_PRICE_RATIO are ignored as probable data errors or pack-size changes.
+* Per supermarket and category, the monthly change is the geometric mean of those ratios, so a product that doubles in price and one that halves cancel each other out.
+* The index is 100 in the base month and multiplies the monthly changes from there. A new product only counts from its second month, so new products do not cause jumps.
+* All food combines all food categories, so non-food products such as shampoo do not affect it.
 
-**Note: Shared categories**: Products are grouped by the shared categories in the Categories table, which are filled by the category importer (see code/importer/categories/category_importer.md). Because every supermarket uses the same 25 categories, the category chart on the Prices tab can compare supermarkets directly. Products without a shared category are shown as Onbekend. The category filter only lists the categories of the selected supermarkets.
+Only price changes can be compared between supermarkets, not price levels, so all lines start at 100 in the same base month: the first month shown. With the date slider covering the whole period (the default) this is November 2022, the first month of the supermarket price data; when the date range filter of the Prices page starts later, that month becomes the base month. A supermarket whose data starts after the base month (Lidl, from November 2025) starts at the CPI level of its own first month and follows its own price changes from there; a note above the chart says which supermarkets start later. Its level therefore shows how its prices moved compared with general inflation since it started, not how it compares with the other supermarkets before that month.
+
+**Note: CPI line**: The price index chart also shows the consumer price index (CPI, all goods and services, from the EconomyStatistics table) as a grey line, so supermarket price changes can be compared with general inflation. The CPI is rescaled to 100 in the same base month as the supermarket lines: the CPI of each month divided by the CPI of the base month, times 100. The CPI level is used instead of the stored monthly rates of change, because those are rounded to one decimal and would add up rounding errors. The economy statistics start in November 2022, the same month as the supermarket price data, so the CPI is available for every base month and for the starting month of every supermarket. Note that the CPI covers all goods and services (including energy, rent and services), while the supermarket index only covers supermarket products.
+
+**Note: Cao wage line**: Below the CPI chart, the Prices page shows the same price index compared with collective (cao) wages, so price changes can be compared with wage growth. The wage line is built by wage_level_from_yearly_increase() in data_access.py from the YearlyWageIncrease column, which is not changed for this: each month the wage level grows by the twelfth root of that month's yearly increase (4.7% per year becomes about 0.38% per month). The line is then rescaled to 100 in the same base month as the supermarket lines. This is an estimate: CBS raises cao wages mostly in January and July, so the real cao wage index rises in steps, while this line spreads each increase evenly over the year and can differ from the real index by up to about 3 points along the way (about 1 point at the end of the chart). The chart's caption says it is an estimate. An exact line would need the cao wage index level (CBS table 85663NED) as an extra column in the EconomyStatistics table.
+
+Both charts are drawn by the same function, draw_price_index_chart() in app.py, which takes the comparison line, its name and its caption text.
+
+**Note: Price change per category**: The last chart on the Prices page is a horizontal bar chart with the percentage price change of the same products per food category, with one bar per supermarket and All food at the top; the other categories are sorted from the largest to the smallest average change. The change is calculated in the same way as the price index: the monthly changes of the same products are multiplied over the period, so +5% means the same products became 5% more expensive. The period follows the date range filter in the sidebar: from its start month (November 2022 by default) up to its end month. A supermarket whose data starts later than the start of the date range (Lidl, from November 2025) covers its own, shorter period from its first month with data; a note above the chart and the tooltip of its bars say so, because those bars cannot be compared one-to-one with the other supermarkets. The chart shows all food categories, so the category filter does not apply to it; the date range and supermarket filters do. Lighter bars are based on fewer than MIN_COMPARABLE_PRODUCTS comparable products per month. Supermarkets without price changes in the period, such as Plus after July 2024, get a bar of 0%.
+
+**Note: Months without price changes**: Parts of the price data contain copied prices, where every product has the same price as on the day before (for example all Plus prices after 16 July 2024). A month without any price change keeps the index at the level of the month before, so the line continues flat; the tooltip then says "no price changes this month". Months without any data for a supermarket (Plus in March and April 2024) are bridged with a straight line between the months before and after.
+
+**Note: Reliability**: A month based on fewer than MIN_COMPARABLE_PRODUCTS comparable products is shown with a lighter dot, and the tooltip says how many products it is based on. This mostly concerns Jumbo and Plus categories before mid-2024, when their data contained only a few hundred products.
+
+**Note: Shared categories**: Products are grouped by the shared categories in the Categories table, which are filled by the category importer (see code/importer/categories/category_importer.md). Because every supermarket uses the same 25 categories, the price index chart on the Prices page can compare supermarkets directly. Products without a shared category are shown as Onbekend. The category filter only lists the categories of the selected supermarkets.
 
 When the database does not have shared categories yet (no Categories table or no Products.categoryId column), the dashboard falls back to each supermarket's own top-level category, using the TOP_CATEGORY_SQL expression:
 * AH: Home\Producten\Zuivel, eieren\Yoghurt en skyr\... becomes Zuivel, eieren
@@ -86,7 +125,7 @@ When the database does not have shared categories yet (no Categories table or no
 
 These fallback categories are not comparable between supermarkets. Category paths in any other format become Overig.
 
-**Note: Comparing category prices**: Even with shared categories, the average price of a category also depends on which products a supermarket sells: a chain with more premium products or larger packs has a higher average without being more expensive for the same product. The category chart shows price development and differences in the range, not the price of identical products. The essential basket is meant for comparing identical products.
+**Note: Comparing supermarkets**: The price index shows how fast prices change at each supermarket, not which supermarket is cheaper: an index of 110 at two supermarkets means both became 10% more expensive, whatever their prices were. The essential basket is meant for comparing the price of identical products.
 
 **Note: Missing data**: When data is not available yet, the dashboard shows an explanation instead of an empty or made-up chart:
 * Essential basket: the basket metrics and charts need products with isBasketProduct set to true in the Products table.
@@ -139,7 +178,7 @@ Changes to app.py or data_access.py are then applied to the running dashboard au
 
 
 #### First load and performance
-The first time the dashboard is opened, the monthly category prices are calculated from all price records. With 19 million price records this took about 20 seconds; a spinner is shown in the meantime. After that, the result is kept in memory for 6 hours (LONG_CACHE_TTL), and the dashboard responds immediately.
+Every page only loads the data it needs, so the Overview, Economy and Municipalities pages open immediately. The first time the Prices page is opened, the price index is calculated from all price records. With 19 million price records this takes up to a minute (about 45 seconds when tested); a spinner is shown in the meantime. After that, the result is kept in memory for 6 hours (LONG_CACHE_TTL), and the Prices page also responds immediately.
 
 The other queries take less than a second together. The product search takes about one second.
 

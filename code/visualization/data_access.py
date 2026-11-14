@@ -14,6 +14,7 @@
 # Importing necessary libraries
 import os
 
+import numpy as np
 import pandas as pd
 import psycopg2
 import streamlit as st
@@ -21,12 +22,24 @@ import streamlit as st
 # How long query results are cached, in seconds. The importers add data at most daily.
 CACHE_TTL = 60 * 60
 
-# The monthly category aggregate scans every price row (about 20 seconds),
+# The price index query scans every price row (up to a minute),
 # so it is kept longer
 LONG_CACHE_TTL = 6 * 60 * 60
 
 # Maximum number of products returned by the product search
 SEARCH_LIMIT = 200
+
+# PRICE INDEX SETTINGS
+# Price ratios (this month / previous month of the same product) outside these limits
+# are ignored as probable data errors or pack-size changes
+MIN_PRICE_RATIO = 0.5
+MAX_PRICE_RATIO = 2.0
+
+# Months based on fewer comparable products than this are shown as less reliable
+MIN_COMPARABLE_PRODUCTS = 10
+
+# Name of the index over all food categories together
+ALL_FOOD = "All food"
 
 # Fallback for databases without shared categories (Categories table and
 # Products.categoryId, filled by code/importer/categories/category_importer.py):
@@ -168,13 +181,21 @@ def load_municipalities() -> pd.DataFrame:
 
 
 
-# MONTHLY AVERAGE PRICE PER SUPERMARKET AND TOP-LEVEL CATEGORY
-# Each product is first averaged per month, so products that were scraped on more
-# days do not weigh more; those product averages are then averaged per category.
-@st.cache_data(ttl=LONG_CACHE_TTL, show_spinner="Calculating monthly category prices from all price records (the first load takes about 20 seconds)...")
-def load_monthly_category_prices() -> pd.DataFrame:
+# MONTHLY PRICE CHANGE OF THE SAME PRODUCTS, PER SUPERMARKET AND CATEGORY
+# The basis of the price index (see chain_price_index below). For every product:
+#   1. its average price per month,
+#   2. the ratio between that price and its price in its previous month with a price
+#      (this also bridges months without any data, such as Plus in March-April 2024).
+# Per supermarket, category and month the query returns the average of the logarithms
+# of those ratios (the logarithm of their geometric mean, the method CBS uses for the
+# CPI), the number of comparable products and how many of them changed price.
+# New products only count from their second month, so they do not cause jumps.
+@st.cache_data(ttl=LONG_CACHE_TTL, show_spinner="Calculating the price index from all price records (the first load can take up to a minute)...")
+def load_price_index_links() -> pd.DataFrame:
     category, category_join = category_sql()
-    prices = run_query(f"""
+    is_food = "COALESCE(c.isfood, false)" if category_join else "true"
+
+    links = run_query(f"""
         WITH product_month AS (
             SELECT
                 supermarketid,
@@ -182,24 +203,190 @@ def load_monthly_category_prices() -> pd.DataFrame:
                 date_trunc('month', date)::date AS month,
                 avg(price) AS price
             FROM supermarketsproducts
-            WHERE price IS NOT NULL
+            WHERE price > 0
             GROUP BY supermarketid, productid, date_trunc('month', date)
+        ),
+        product_link AS (
+            SELECT
+                supermarketid,
+                productid,
+                month,
+                price / lag(price) OVER (
+                    PARTITION BY supermarketid, productid ORDER BY month
+                ) AS ratio
+            FROM product_month
         )
         SELECT
-            pm.month AS "Date",
+            pl.month AS "Date",
             s.name AS "SupermarketName",
             {category} AS "Category",
-            avg(pm.price) AS "Price",
-            count(*) AS "Products"
-        FROM product_month pm
-        JOIN products p ON p.productid = pm.productid
-        JOIN supermarkets s ON s.supermarketid = pm.supermarketid
+            {is_food} AS "IsFood",
+            avg(ln(pl.ratio)) FILTER (WHERE pl.ratio BETWEEN %(min_ratio)s AND %(max_ratio)s) AS "AvgLogRatio",
+            count(*) FILTER (WHERE pl.ratio BETWEEN %(min_ratio)s AND %(max_ratio)s) AS "Products",
+            count(*) FILTER (WHERE pl.ratio BETWEEN %(min_ratio)s AND %(max_ratio)s AND pl.ratio <> 1) AS "PriceChanges"
+        FROM product_link pl
+        JOIN products p ON p.productid = pl.productid
+        JOIN supermarkets s ON s.supermarketid = pl.supermarketid
         {category_join}
-        GROUP BY pm.month, s.name, 3
-        ORDER BY pm.month, s.name, 3
-    """, work_mem="512MB")
-    prices["Date"] = pd.to_datetime(prices["Date"])
-    return to_numeric(prices, ["Price", "Products"])
+        GROUP BY pl.month, s.name, 3, 4
+        ORDER BY pl.month, s.name, 3
+    """, {"min_ratio": MIN_PRICE_RATIO, "max_ratio": MAX_PRICE_RATIO}, work_mem="512MB")
+
+    links["Date"] = pd.to_datetime(links["Date"])
+    links["IsFood"] = links["IsFood"].astype(bool)
+    return to_numeric(links, ["AvgLogRatio", "Products", "PriceChanges"])
+
+
+
+# Function to turn the monthly links into a price index for one category (or ALL_FOOD)
+# and the selected supermarkets, compared with another series such as the CPI or wages.
+# The comparison series is a DataFrame with the columns Date and Value (any level, for
+# example the CPI with 2015 = 100).
+# The base month is the first month shown: the earliest month in the given links (so the
+# date filter decides it). In the base month the comparison series and every supermarket
+# with data are 100; from there the monthly changes are multiplied. A supermarket whose
+# data starts later (such as Lidl) starts at the comparison level of its first month and
+# follows its own price changes from there. A month without price changes keeps the index
+# at the level of the month before. Months without any data for a supermarket stay empty
+# (the chart connects the line).
+# Returns the price index and the comparison series rescaled to 100 in the base month.
+def chain_price_index(links: pd.DataFrame, category: str, supermarkets: list[str],
+                      comparison: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    selected = links[links["SupermarketName"].isin(supermarkets)]
+
+    if category == ALL_FOOD:
+        # The geometric mean over all food products: the category averages weighted
+        # by their number of comparable products
+        food = selected[selected["IsFood"]].copy()
+        food["WeightedLog"] = food["AvgLogRatio"].fillna(0) * food["Products"]
+        selected = food.groupby(["Date", "SupermarketName"], as_index=False)[
+            ["WeightedLog", "Products", "PriceChanges"]
+        ].sum()
+        selected["AvgLogRatio"] = np.where(
+            selected["Products"] > 0, selected["WeightedLog"] / selected["Products"].where(selected["Products"] > 0), np.nan
+        )
+    else:
+        selected = selected[selected["Category"] == category]
+
+    columns = ["Date", "SupermarketName", "Index", "Products", "PriceChanges", "LowReliability"]
+    if selected.empty:
+        return pd.DataFrame(columns=columns), pd.DataFrame(columns=["Date", "Index"])
+
+    # The base month: the first month shown
+    base_month = selected["Date"].min()
+
+    # Comparison series rescaled to 100 in the base month, for the months of the chart
+    comparison = comparison.dropna(subset=["Value"])
+    comparison = comparison[
+        (comparison["Date"] >= base_month) & (comparison["Date"] <= selected["Date"].max())
+    ]
+    comparison_base = comparison.loc[comparison["Date"] == base_month, "Value"]
+    if comparison_base.empty:
+        comparison_index = pd.DataFrame(columns=["Date", "Index"])
+    else:
+        comparison_index = pd.DataFrame({
+            "Date": comparison["Date"],
+            "Index": 100 * comparison["Value"] / comparison_base.iloc[0]
+        })
+    comparison_level = comparison_index.set_index("Date")["Index"]
+
+    chained = []
+    for supermarket, data in selected.groupby("SupermarketName"):
+        data = data.sort_values("Date").copy()
+        # No comparable products (the first month, or a month with only new products):
+        # the index stays at the level of the month before
+        relative = np.exp(data["AvgLogRatio"].fillna(0).cumsum())
+        start_month = data["Date"].iloc[0]
+
+        # Starting level: 100 in the base month, or the comparison level of the first month
+        # for a supermarket whose data starts later (left out when that level is unknown)
+        if start_month == base_month:
+            start_level = 100.0
+        elif start_month in comparison_level.index:
+            start_level = comparison_level[start_month]
+        else:
+            continue
+
+        data["Index"] = start_level * relative / relative.iloc[0]
+        data["SupermarketName"] = supermarket
+        chained.append(data)
+
+    if not chained:
+        return pd.DataFrame(columns=columns), comparison_index
+    index = pd.concat(chained, ignore_index=True)
+
+    # A month is less reliable when it is based on few comparable products; the first
+    # month of every supermarket is the starting point and has nothing to compare with
+    first_month = index["Date"] == index.groupby("SupermarketName")["Date"].transform("min")
+    index["LowReliability"] = (index["Products"] < MIN_COMPARABLE_PRODUCTS) & ~first_month
+    return index[columns].sort_values(["SupermarketName", "Date"]).reset_index(drop=True), comparison_index
+
+
+
+# Function to calculate the price change of the same products per food category and
+# supermarket, for the "price change per category" bar chart.
+# The period is set by the date filter: from the first month in the given links (the
+# start of the date range) up to the last month. A supermarket whose data starts later
+# (such as Lidl) covers its own, shorter period from its first month; its start month is
+# returned in StartMonth, so the chart can say so. The change is the product of the
+# monthly changes after the start month: (geometric mean ratio of month 1) x (month 2)
+# x ... - 1. Also returns ALL_FOOD (all food categories together) and the average number
+# of comparable products per month, to mark less reliable bars.
+# Returns the changes and the start and end month of the period.
+def category_price_changes(links: pd.DataFrame, supermarkets: list[str]
+                           ) -> tuple[pd.DataFrame, pd.Timestamp | None, pd.Timestamp | None]:
+    columns = ["Category", "SupermarketName", "Change", "Products", "LowReliability", "StartMonth"]
+    food = links[links["SupermarketName"].isin(supermarkets) & links["IsFood"]].copy()
+    if food.empty:
+        return pd.DataFrame(columns=columns), None, None
+
+    start_month = food["Date"].min()
+    end_month = food["Date"].max()
+
+    # Start month per supermarket: the start of the period, or its first month with data
+    supermarket_start = food.groupby("SupermarketName")["Date"].min()
+    food["StartMonth"] = food["SupermarketName"].map(supermarket_start)
+
+    # Only the monthly changes after each supermarket's start month count
+    period = food[food["Date"] > food["StartMonth"]].copy()
+    if period.empty:
+        return pd.DataFrame(columns=columns), start_month, end_month
+
+    # All food: per month the category averages weighted by their comparable products
+    period["WeightedLog"] = period["AvgLogRatio"].fillna(0) * period["Products"]
+    all_food = period.groupby(["Date", "SupermarketName"], as_index=False)[
+        ["WeightedLog", "Products"]
+    ].sum()
+    all_food["AvgLogRatio"] = all_food["WeightedLog"] / all_food["Products"].where(all_food["Products"] > 0)
+    all_food["Category"] = ALL_FOOD
+    combined = pd.concat([period, all_food], ignore_index=True)
+
+    changes = combined.groupby(["Category", "SupermarketName"], as_index=False).agg(
+        LogChange=("AvgLogRatio", lambda values: values.fillna(0).sum()),
+        Products=("Products", "mean")
+    )
+    changes["StartMonth"] = changes["SupermarketName"].map(supermarket_start)
+    # Rounded to one decimal; + 0.0 turns a rounded -0.0 into 0.0
+    changes["Change"] = (100 * (np.exp(changes["LogChange"]) - 1)).round(1) + 0.0
+    changes["LowReliability"] = changes["Products"] < MIN_COMPARABLE_PRODUCTS
+    return changes[columns], start_month, end_month
+
+
+
+# Function to build a monthly cao wage level from the stored yearly wage increases
+# (YearlyWageIncrease: the change of cao wages compared with the same month a year
+# earlier). Each month the level grows by the twelfth root of that month's yearly
+# change, for example 4.7% per year becomes about 0.38% per month. CBS raises cao wages
+# mostly in January and July, so this approximation is smoother than the real cao wage
+# index. Returns a DataFrame with Date and Value (100 in the first month).
+def wage_level_from_yearly_increase(economy: pd.DataFrame) -> pd.DataFrame:
+    wages = economy[["Date", "YearlyWageIncrease"]].dropna().sort_values("Date")
+    if wages.empty:
+        return pd.DataFrame(columns=["Date", "Value"])
+    monthly_factor = (1 + wages["YearlyWageIncrease"] / 100) ** (1 / 12)
+    # The first month is the starting point (100); growth starts from the second month
+    monthly_factor.iloc[0] = 1.0
+    return pd.DataFrame({"Date": wages["Date"], "Value": 100 * monthly_factor.cumprod()})
 
 
 
