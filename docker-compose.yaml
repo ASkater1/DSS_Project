@@ -93,17 +93,17 @@ services:
     container_name: basket
     build: ./code/basket/  # where to find the Dockerfile to construct the image
     environment:
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_USER: ${DB_USER}
-      DB_NAME: ${DB_NAME}
-      DB_HOST: ${DB_HOST}
+      DB_PASSWORD: ${DB_PASSWORD:?environment_unconfigured}
+      DB_USER: ${DB_USER:?environment_unconfigured}
+      DB_NAME: ${DB_NAME:?environment_unconfigured}
+      DB_HOST: ${DB_HOST:?environment_unconfigured}
     depends_on:
       database:
         condition: service_healthy
       static_importer:
         condition: service_completed_successfully
-      live:
-        condition: service_completed_successfully
+      #live:
+      #  condition: service_completed_successfully
     restart: "no"
   #live:
   #  container_name: live
@@ -152,25 +152,25 @@ services:
         condition: service_completed_successfully
       financial_importer:
         condition: service_completed_successfully
-      live:
-        condition: service_completed_successfully
+      #live:
+      #  condition: service_completed_successfully
     ports:
-      - '8501:8501'
+      - '${HTTP_PORT:-8501}:8501'
     restart: always
 
   database:
-    container_name: ${DB_HOST}
+    container_name: ${DB_HOST:?environment_unconfigured}
     image: postgres:16
     environment:
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?environment_unconfigured}
+      POSTGRES_USER: ${DB_USER:?environment_unconfigured}
+      POSTGRES_DB: ${DB_NAME:?environment_unconfigured}
       DB_STORAGE_TYPE: 'HDD'
     volumes:
       - ./data/db/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql
       - db:/var/lib/postgresql/data
     restart: always
-    # temporary open database port to create manually mapping of basket.
+    # temporary open database port to create manual mapping of basket.
     #ports:
     #  - "5432:5432"
     healthcheck:
