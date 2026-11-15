@@ -172,7 +172,7 @@ if __name__ == "__main__":
         conn.execute(text("""
             UPDATE products
             SET isbasketproduct = FALSE,
-                basket_code = NULL
+                basketcode = NULL
             """))
         
         for product_id, code in selected_products.items():

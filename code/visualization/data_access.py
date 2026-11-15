@@ -366,9 +366,12 @@ def load_price_index_links(product_names: tuple[str, ...] = ()) -> pd.DataFrame:
 # follows its own price changes from there. A month without price changes keeps the index
 # at the level of the month before. Months without any data for a supermarket stay empty
 # (the chart connects the line).
+# The comparison series runs up to end_month when it is given (otherwise up to the last
+# month with price data).
 # Returns the price index and the comparison series rescaled to 100 in the base month.
 def chain_price_index(links: pd.DataFrame, categories: tuple[str, ...], supermarkets: list[str],
-                      comparison: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+                      comparison: pd.DataFrame,
+                      end_month: pd.Timestamp | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     selected = links[links["SupermarketName"].isin(supermarkets)]
     selected = filter_selected_categories(selected, categories)
 
@@ -391,10 +394,13 @@ def chain_price_index(links: pd.DataFrame, categories: tuple[str, ...], supermar
     # The base month: the first month shown
     base_month = selected["Date"].min()
 
-    # Comparison series rescaled to 100 in the base month, for the months of the chart
+    # Comparison series rescaled to 100 in the base month, for the months of the chart.
+    # It runs up to end_month (the end of the date range) when given, so the CPI can
+    # continue after the last month with supermarket prices.
+    last_month = end_month if end_month is not None else selected["Date"].max()
     comparison = comparison.dropna(subset=["Value"])
     comparison = comparison[
-        (comparison["Date"] >= base_month) & (comparison["Date"] <= selected["Date"].max())
+        (comparison["Date"] >= base_month) & (comparison["Date"] <= last_month)
     ]
     comparison_base = comparison.loc[comparison["Date"] == base_month, "Value"]
     if comparison_base.empty:
@@ -439,48 +445,70 @@ def chain_price_index(links: pd.DataFrame, categories: tuple[str, ...], supermar
 
 
 
-# Function to project the price index of supermarkets whose real price data ends before
-# the end of the chart (end_month). From each supermarket's last month the line continues
-# at its average monthly change over the last 12 months of real data (from the index
-# 12 months earlier, or its first month when it has less history), up to end_month but
-# for at most MAX_PROJECTION_MONTHS months, because a longer projection is too uncertain.
-# The returned rows start with the last real month, so the dashed projection connects to
-# the solid line. Returns a DataFrame with Date, SupermarketName and Index.
-def project_price_index(price_index: pd.DataFrame, end_month: pd.Timestamp | None,
-                        history_months: int = 12) -> pd.DataFrame:
+# Function for the linear regression behind the dashed prediction lines. A straight line
+# is fitted through the values of the last 12 months (numpy.polyfit, degree 1), and its
+# slope (index points per month) is used to continue the line from the last value for
+# the given number of months. The first returned row is the last real month, so the
+# dashed line connects to the solid line. Returns a DataFrame with Date and Index, or
+# None when there are fewer than 2 months to fit the line on.
+def predict_with_linear_regression(data: pd.DataFrame, months_ahead: int,
+                                   history_months: int = 12) -> pd.DataFrame | None:
+    data = data.sort_values("Date")
+    last_month = data["Date"].iloc[-1]
+
+    # The months are turned into numbers (0, 1, 2, ...) so a line can be fitted
+    history = data[data["Date"] > last_month - pd.DateOffset(months=history_months)]
+    if len(history) < 2 or months_ahead < 1:
+        return None
+    month_numbers = (
+        (history["Date"].dt.year - history["Date"].iloc[0].year) * 12
+        + history["Date"].dt.month - history["Date"].iloc[0].month
+    )
+    slope, intercept = np.polyfit(month_numbers, history["Index"], 1)
+
+    months = pd.date_range(last_month, periods=months_ahead + 1, freq="MS")
+    return pd.DataFrame({
+        "Date": months,
+        "Index": data["Index"].iloc[-1] + slope * np.arange(len(months))
+    })
+
+
+# Function to predict the price index of every supermarket whose real price data ends
+# before the end of the chart (end_month), with predict_with_linear_regression(). The
+# prediction runs up to end_month, but for at most MAX_PROJECTION_MONTHS months, because
+# a longer prediction is too uncertain. Returns a DataFrame with Date, SupermarketName
+# and Index.
+def project_price_index(price_index: pd.DataFrame, end_month: pd.Timestamp | None) -> pd.DataFrame:
     columns = ["Date", "SupermarketName", "Index"]
     if price_index.empty or end_month is None or pd.isna(end_month):
         return pd.DataFrame(columns=columns)
 
     projections = []
     for supermarket, data in price_index.groupby("SupermarketName"):
-        data = data.sort_values("Date")
-        last_month = data["Date"].iloc[-1]
-        if last_month >= end_month or len(data) < 2:
+        last_month = data["Date"].max()
+        if last_month >= end_month:
             continue
-
-        # Average monthly change over the last 12 months of real data
-        history = data[data["Date"] <= last_month - pd.DateOffset(months=history_months)]
-        reference = history.iloc[-1] if not history.empty else data.iloc[0]
-        months_between = (
-            (last_month.year - reference["Date"].year) * 12
-            + last_month.month - reference["Date"].month
+        months_left = (end_month.year - last_month.year) * 12 + end_month.month - last_month.month
+        prediction = predict_with_linear_regression(
+            data, min(months_left, MAX_PROJECTION_MONTHS)
         )
-        if months_between <= 0 or reference["Index"] <= 0:
-            continue
-        monthly_factor = (data["Index"].iloc[-1] / reference["Index"]) ** (1 / months_between)
-
-        projection_end = min(end_month, last_month + pd.DateOffset(months=MAX_PROJECTION_MONTHS))
-        months = pd.date_range(last_month, projection_end, freq="MS")
-        projections.append(pd.DataFrame({
-            "Date": months,
-            "SupermarketName": supermarket,
-            "Index": data["Index"].iloc[-1] * monthly_factor ** np.arange(len(months))
-        }))
+        if prediction is not None:
+            prediction["SupermarketName"] = supermarket
+            projections.append(prediction)
 
     if not projections:
         return pd.DataFrame(columns=columns)
     return pd.concat(projections, ignore_index=True)[columns]
+
+
+# Function to predict the comparison line (the CPI) for MAX_PROJECTION_MONTHS months
+# after its last month, with predict_with_linear_regression(). Returns a DataFrame with
+# Date and Index (empty when there is too little data).
+def project_comparison(comparison_index: pd.DataFrame) -> pd.DataFrame:
+    if comparison_index.empty:
+        return pd.DataFrame(columns=["Date", "Index"])
+    prediction = predict_with_linear_regression(comparison_index, MAX_PROJECTION_MONTHS)
+    return prediction if prediction is not None else pd.DataFrame(columns=["Date", "Index"])
 
 
 
