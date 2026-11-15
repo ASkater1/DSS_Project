@@ -1,54 +1,54 @@
-code,name,category,include,exclude
-011110,Granen,"Pasta, rijst & wereldkeuken",rijst,rijstwafel|rijstdrink|rijstmelk|rijstpap|toverrijst|rijstazijn|kant-en-klaar|voorgestoomd|rijstnoedel|rijst noedel|kant & klaar|lunch bowl|rijst met vis|konjac|truffel|kaas & peper|sriracha|rijstvermicelli|rijstvellen|rijstsnack|rijsttafelmix|pandan|notenrijst|rijstnoodles|paella
-011120,Meel van granen,"Ontbijt, beleg & bakproducten",tarwebloem|tarwemeel|patentbloem,mix|pannenkoek|bakmix|zelfrijzend
-011130,Brood en bakkerijproducten,Brood & gebak,volkoren brood|volkorenbrood|wit brood|witbrood|bruin brood|bruinbrood,belegd|toast|crouton|broodje hamburger
-011140,Ontbijtgranen,"Ontbijt, beleg & bakproducten",havermout|muesli|cornflakes,reep|koek|drink
-011150,Pasta en noedels,"Pasta, rijst & wereldkeuken",spaghetti|macaroni|penne|fusilli|couscous,saus|maaltijd|kant-en-klaar|kant & klaar|salade
-011190,Overige graanproducten,"Chips, noten & borrelsnacks",popcorn,kip|karamel|chocolade
-011221,Rundvlees,Vlees & kip,rundergehakt|runderlap|biefstuk,burger|gehaktbal|gemarineerd|bereid|saus
-011222,Varkensvlees,Vlees & kip,varkenshaas|speklap|karbonade,gemarineerd|gepaneerd|schnitzel
-011224,Pluimveevlees,Vlees & kip,kipfilet|kipdijfilet,beleg|gerookt|gepaneerd|schnitzel|salade|maaltijd
-011230,Gezouten en gerookt vlees,Vleeswaren,achterham|salami,pizza|salade|sandwich
-011250,Vleesbereidingen,Vlees & kip,hamburger|braadworst,vegetarisch|vegan|plantaardig
-011310,Verse en diepgevroren vis,Vis,zalmfilet|kabeljauwfilet,gerookt|gepaneerd|saus|salade
-011320,Gerookte vis,Vis,gerookte zalm|gerookte makreel,salade|wrap
-011330,Visbereidingen,Vis,tonijn in blik|tonijnstukken|vissticks,salade|maaltijd
-011340,Schaal- en schelpdieren,Vis,garnalen|mosselen,saus|salade|soep|chips
-011410,Volle melk,Zuivel & eieren,volle melk,chocolade|drink|koffie|poeder|baby|lactosevrij
-011420,Halfvolle en magere melk,Zuivel & eieren,halfvolle melk|magere melk,chocolade|drink|koffie|poeder|baby
-011440,Plantaardige melk,Zuivel & eieren,havermelk|sojadrink|amandeldrink,yoghurt|dessert|koken
-011450,Kaas,Kaas,jong belegen|jongbelegen|goudse kaas|oude kaas,saus|snack|chips|pizza|salade
-011460,Yoghurt,Zuivel & eieren,yoghurt|kwark,ijs|drank|reep|saus
-011480,Eieren,Zuivel & eieren,scharreleieren|vrije uitloop eieren|biologische eieren,salade|koek|chocolade|noedels
-011510,Plantaardige oliën,"Soepen, sauzen, kruiden & conserven",zonnebloemolie|olijfolie,dressing|mayonaise|chips|tonijn
-011520,Boter,Zuivel & eieren,roomboter,koek|croissant|saus|kruidenboter
-011530,Margarine,Zuivel & eieren,margarine|halvarine,bakmix|koek
-011610,Tropisch fruit,"Groente, aardappelen & fruit",bananen|banaan|mango,sap|smoothie|chips|gedroogd|diepvries|puree|yoghurt
-011620,Citrusfruit,"Groente, aardappelen & fruit",sinaasappel|mandarijn,sap|limonade|schil|jam|siroop
-011630,Pit- en steenvruchten,"Groente, aardappelen & fruit",elstar|jonagold|conference peer,sap|moes|taart|jam|gedroogd
-011640,Bessen,"Groente, aardappelen & fruit",aardbeien|blauwe bessen,jam|yoghurt|sap|diepvries|siroop
-011650,Overig vers fruit,"Groente, aardappelen & fruit",druiven|kiwi,sap|gedroogd|jam|yoghurt
-011680,Noten,"Chips, noten & borrelsnacks",ongezouten amandelen|ongezouten walnoten|ongezouten pinda,mix|reep|chocolade
-011710,Blad- en stengelgroenten,"Groente, aardappelen & fruit",broccoli|spinazie|bloemkool,soep|saus|diepvries|ovenschotel|puree|maaltijd
-011720,Vruchtdragende groenten,"Groente, aardappelen & fruit",komkommer|tomaten|paprika,saus|soep|puree|ketchup|salade|chips|gedroogd
-011730,Groene peulgroenten,"Groente, aardappelen & fruit",sperziebonen|snijbonen,conserven|blik|diepvries|maaltijd
-011740,Overige verse groenten,"Groente, aardappelen & fruit",winterpeen|wortelen|gele uien|rode uien,soep|saus|chips|diepvries|mix|gesneden
-011750,Aardappelen en knollen,"Groente, aardappelen & fruit",kruimige aardappelen|vastkokende aardappelen,friet|puree|schijfjes|gekookt|chips
-011760,Gedroogde peulvruchten,"Soepen, sauzen, kruiden & conserven",gedroogde linzen|gedroogde kikkererwten,soep|saus|kant-en-klaar
-011790,Groentebereidingen,"Soepen, sauzen, kruiden & conserven",tomatenpuree|doperwten in blik|mais in blik,soep|saus|maaltijd
-011810,Suiker,"Ontbijt, beleg & bakproducten",kristalsuiker|basterdsuiker,vanille|koek|stroop|siroop
-011830,Jam en honing,"Ontbijt, beleg & bakproducten",aardbeienjam|bloemenhoning,koek|thee|saus
-011840,Notenpasta,"Ontbijt, beleg & bakproducten",pindakaas,reep|koek|ijs|chocolade
-011850,Chocolade,"Koek, snoep & chocolade",melkchocolade|pure chocolade,koek|saus|ijs|drank|hagelslag
-011860,IJs,Diepvries & ijs,vanille ijs|vanille-ijs|roomijs,taart|cake|saus
-011890,Snoep,"Koek, snoep & chocolade",winegums|drop|snoep,ijs|koek|chocolade|saus
-011910,Kant-en-klare maaltijden,Maaltijden & salades,lasagne|pizza margherita|macaroni maaltijd,saus|mix|kruiden|bodem
-011920,Babyvoeding,Babyvoeding,opvolgmelk|zuigelingenvoeding|babyhapje,fles|speen|luier
-011930,Sauzen en zout,"Soepen, sauzen, kruiden & conserven",tomatenketchup|mayonaise|keukenzout,chips|salade|maaltijd
-011940,Kruiden en specerijen,"Soepen, sauzen, kruiden & conserven",zwarte peper|paprikapoeder|kaneel,chips|saus|mix|thee
-012100,Fruit- en groentesappen,"Frisdrank, sappen & water",appelsap|sinaasappelsap,frisdrank|limonade|nectar|siroop
-012200,Koffie,Koffie & thee,filterkoffie|gemalen koffie|koffiebonen,melk|drank|ijs|chocolade
-012300,Thee,Koffie & thee,zwarte thee|groene thee|rooibos,ijsthee|frisdrank|drank
-012500,Water,"Frisdrank, sappen & water",mineraalwater|bronwater,smaak|citroen|fruit|limonade
-012600,Frisdrank,"Frisdrank, sappen & water",cola|sinas,snoep|ijs|saus|zero sugar syrup
-012900,Overige alcoholvrije dranken,"Frisdrank, sappen & water",energy drink|energiedrank,poeder|reep|snoep
+code,name,category,include,exclude,quantity,unit
+011110,Granen,"Pasta, rijst & wereldkeuken",rijst,rijstwafel|rijstdrink|rijstmelk|rijstpap|toverrijst|rijstazijn|kant-en-klaar|voorgestoomd|rijstnoedel|rijst noedel|kant & klaar|lunch bowl|rijst met vis|konjac|truffel|kaas & peper|sriracha|rijstvermicelli|rijstvellen|rijstsnack|rijsttafelmix|pandan|notenrijst|rijstnoodles|paella,1000,g
+011120,Meel van granen,"Ontbijt, beleg & bakproducten",tarwebloem|tarwemeel|patentbloem,mix|pannenkoek|bakmix|zelfrijzend,1000,g
+011130,Brood en bakkerijproducten,Brood & gebak,volkoren brood|volkorenbrood|wit brood|witbrood|bruin brood|bruinbrood,belegd|toast|crouton|broodje hamburger,800,g
+011140,Ontbijtgranen,"Ontbijt, beleg & bakproducten",havermout|muesli|cornflakes,reep|koek|drink,500,g
+011150,Pasta en noedels,"Pasta, rijst & wereldkeuken",spaghetti|macaroni|penne|fusilli|couscous,saus|maaltijd|kant-en-klaar|kant & klaar|salade,500,g
+011190,Overige graanproducten,"Chips, noten & borrelsnacks",popcorn,kip|karamel|chocolade,100,g
+011221,Rundvlees,Vlees & kip,rundergehakt|runderlap|biefstuk,burger|gehaktbal|gemarineerd|bereid|saus,300,g
+011222,Varkensvlees,Vlees & kip,varkenshaas|speklap|karbonade,gemarineerd|gepaneerd|schnitzel,300,g
+011224,Pluimveevlees,Vlees & kip,kipfilet|kipdijfilet,beleg|gerookt|gepaneerd|schnitzel|salade|maaltijd,300,g
+011230,Gezouten en gerookt vlees,Vleeswaren,achterham|salami,pizza|salade|sandwich,100,g
+011250,Vleesbereidingen,Vlees & kip,hamburger|braadworst,vegetarisch|vegan|plantaardig,250,g
+011310,Verse en diepgevroren vis,Vis,zalmfilet|kabeljauwfilet,gerookt|gepaneerd|saus|salade,200,g
+011320,Gerookte vis,Vis,gerookte zalm|gerookte makreel,salade|wrap,100,g
+011330,Visbereidingen,Vis,tonijn in blik|tonijnstukken|vissticks,salade|maaltijd,150,g
+011340,Schaal- en schelpdieren,Vis,garnalen|mosselen,saus|salade|soep|chips,200,g
+011410,Volle melk,Zuivel & eieren,volle melk,chocolade|drink|koffie|poeder|baby|lactosevrij,1000,ml
+011420,Halfvolle en magere melk,Zuivel & eieren,halfvolle melk|magere melk,chocolade|drink|koffie|poeder|baby,1000,ml
+011440,Plantaardige melk,Zuivel & eieren,havermelk|sojadrink|amandeldrink,yoghurt|dessert|koken,1000,ml
+011450,Kaas,Kaas,jong belegen|jongbelegen|goudse kaas|oude kaas,saus|snack|chips|pizza|salade,200,g
+011460,Yoghurt,Zuivel & eieren,yoghurt|kwark,ijs|drank|reep|saus,500,g
+011480,Eieren,Zuivel & eieren,scharreleieren|vrije uitloop eieren|biologische eieren,salade|koek|chocolade|noedels,10,st
+011510,Plantaardige oliën,"Soepen, sauzen, kruiden & conserven",zonnebloemolie|olijfolie,dressing|mayonaise|chips|tonijn,1000,ml
+011520,Boter,Zuivel & eieren,roomboter,koek|croissant|saus|kruidenboter,250,g
+011530,Margarine,Zuivel & eieren,margarine|halvarine,bakmix|koek,500,g
+011610,Tropisch fruit,"Groente, aardappelen & fruit",bananen|banaan|mango,sap|smoothie|chips|gedroogd|diepvries|puree|yoghurt,1000,g
+011620,Citrusfruit,"Groente, aardappelen & fruit",sinaasappel|mandarijn,sap|limonade|schil|jam|siroop,1000,g
+011630,Pit- en steenvruchten,"Groente, aardappelen & fruit",elstar|jonagold|conference peer,sap|moes|taart|jam|gedroogd,1000,g
+011640,Bessen,"Groente, aardappelen & fruit",aardbeien|blauwe bessen,jam|yoghurt|sap|diepvries|siroop,250,g
+011650,Overig vers fruit,"Groente, aardappelen & fruit",druiven|kiwi,sap|gedroogd|jam|yoghurt,500,g
+011680,Noten,"Chips, noten & borrelsnacks",ongezouten amandelen|ongezouten walnoten|ongezouten pinda,mix|reep|chocolade,200,g
+011710,Blad- en stengelgroenten,"Groente, aardappelen & fruit",broccoli|spinazie|bloemkool,soep|saus|diepvries|ovenschotel|puree|maaltijd,500,g
+011720,Vruchtdragende groenten,"Groente, aardappelen & fruit",komkommer|tomaten|paprika,saus|soep|puree|ketchup|salade|chips|gedroogd,500,g
+011730,Groene peulgroenten,"Groente, aardappelen & fruit",sperziebonen|snijbonen,conserven|blik|diepvries|maaltijd,500,g
+011740,Overige verse groenten,"Groente, aardappelen & fruit",winterpeen|wortelen|gele uien|rode uien,soep|saus|chips|diepvries|mix|gesneden,1000,g
+011750,Aardappelen en knollen,"Groente, aardappelen & fruit",kruimige aardappelen|vastkokende aardappelen,friet|puree|schijfjes|gekookt|chips,1000,g
+011760,Gedroogde peulvruchten,"Soepen, sauzen, kruiden & conserven",gedroogde linzen|gedroogde kikkererwten,soep|saus|kant-en-klaar,500,g
+011790,Groentebereidingen,"Soepen, sauzen, kruiden & conserven",tomatenpuree|doperwten in blik|mais in blik,soep|saus|maaltijd,400,g
+011810,Suiker,"Ontbijt, beleg & bakproducten",kristalsuiker|basterdsuiker,vanille|koek|stroop|siroop,1000,g
+011830,Jam en honing,"Ontbijt, beleg & bakproducten",aardbeienjam|bloemenhoning,koek|thee|saus,350,g
+011840,Notenpasta,"Ontbijt, beleg & bakproducten",pindakaas,reep|koek|ijs|chocolade,350,g
+011850,Chocolade,"Koek, snoep & chocolade",melkchocolade|pure chocolade,koek|saus|ijs|drank|hagelslag,100,g
+011860,IJs,Diepvries & ijs,vanille ijs|vanille-ijs|roomijs,taart|cake|saus,1000,ml
+011890,Snoep,"Koek, snoep & chocolade",winegums|drop|snoep,ijs|koek|chocolade|saus,200,g
+011910,Kant-en-klare maaltijden,Maaltijden & salades,lasagne|pizza margherita|macaroni maaltijd,saus|mix|kruiden|bodem,400,g
+011920,Babyvoeding,Babyvoeding,opvolgmelk|zuigelingenvoeding|babyhapje,fles|speen|luier,200,g
+011930,Sauzen en zout,"Soepen, sauzen, kruiden & conserven",tomatenketchup|mayonaise|keukenzout,chips|salade|maaltijd,500,ml
+011940,Kruiden en specerijen,"Soepen, sauzen, kruiden & conserven",zwarte peper|paprikapoeder|kaneel,chips|saus|mix|thee,40,g
+012100,Fruit- en groentesappen,"Frisdrank, sappen & water",appelsap|sinaasappelsap,frisdrank|limonade|nectar|siroop,1000,ml
+012200,Koffie,Koffie & thee,filterkoffie|gemalen koffie|koffiebonen,melk|drank|ijs|chocolade,500,g
+012300,Thee,Koffie & thee,zwarte thee|groene thee|rooibos,ijsthee|frisdrank|drank,20,st
+012500,Water,"Frisdrank, sappen & water",mineraalwater|bronwater,smaak|citroen|fruit|limonade,1500,ml
+012600,Frisdrank,"Frisdrank, sappen & water",cola|sinas,snoep|ijs|saus|zero sugar syrup,1500,ml
+012900,Overige alcoholvrije dranken,"Frisdrank, sappen & water",energy drink|energiedrank,poeder|reep|snoep,250,ml

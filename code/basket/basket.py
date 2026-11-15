@@ -84,6 +84,8 @@ with open(RULES_DIR / "cpi_basket_rules.csv", newline="", encoding="utf-8-sig") 
             "category": row["category"],
             "include": row["include"].split("|"),
             "exclude": row["exclude"].split("|") if row["exclude"] else [],
+            "quantity": float(row["quantity"]) if row["quantity"] else None,
+            "unit": row["unit"].strip().lower(),
         }
 
 print(f"Loaded {len(cpi_basket_rules)} CPI basket rules")
@@ -137,16 +139,22 @@ if __name__ == "__main__":
 
     with db_conn.begin() as conn:
         products = (
-            conn.execute(text("""SELECT p.productid, p.name, c.name AS shared_category
+            conn.execute(
+                text(
+                    """SELECT p.productid, p.name, c.name AS shared_category, p.quantity_value, p.quantity_units
             FROM products p
-            JOIN categories c ON p.categoryid = c.categoryid""")).mappings().all()
+            JOIN categories c ON p.categoryid = c.categoryid"""
+                )
+            )
+            .mappings()
+            .all()
         )
         selected_ids = set()
 
         for product in products:
             name = product["name"].lower()
 
-            for rule in cpi_basket_rules.items():
+            for rule in cpi_basket_rules.values():
 
                 if product["shared_category"] != rule["category"]:
                     continue
@@ -156,6 +164,14 @@ if __name__ == "__main__":
 
                 if any(word in name for word in rule["exclude"]):
                     continue
+
+                if rule["quantity"] is not None:
+                    if product["quantity_value"] is None:
+                        continue
+                    if float(product["quantity_value"]) != rule["quantity"]:
+                        continue
+                    if (product["quantity_units"] or "") != rule["unit"]:
+                        continue
 
                 selected_ids.add(product["productid"])
                 break
