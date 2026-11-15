@@ -165,18 +165,9 @@ if __name__ == "__main__":
                 if any(word in name for word in rule["exclude"]):
                     continue
 
-                # if rule["quantity"] is not None:
-                #   if product["quantity_value"] is None:
-                #        continue
-                #    if float(product["quantity_value"]) != rule["quantity"]:
-                #       continue
-                #    if (product["quantity_units"] or "") != rule["unit"]:
-                #        continue
-
                 selected_ids[product["productid"]] = code
                 break
-        # Reset all booleans for testing.
-        # conn.execute(text("UPDATE products SET isbasketproduct = FALSE"))
+        # Reset all booleans for testing, .
         conn.execute(text("""
           UPDATE products
           SET isbasketproduct = FALSE,

@@ -14,12 +14,12 @@ import data_access as db
 st.set_page_config(layout="wide")
 
 
-#Function to render a date range filter for each of the dashboard pages
-#It shows a two-way slider (start date on the left, end date on the right) and, below it,
-#a start and an end date field that always show the selected dates and can also be typed in.
-#The slider and the date fields are kept in sync. By default the whole period of the data is
-#selected. It returns the selected start and end dates as timestamps, or None if there is no
-#date available in the selection.
+# Function to render a date range filter for each of the dashboard pages
+# It shows a two-way slider (start date on the left, end date on the right) and, below it,
+# a start and an end date field that always show the selected dates and can also be typed in.
+# The slider and the date fields are kept in sync. By default the whole period of the data is
+# selected. It returns the selected start and end dates as timestamps, or None if there is no
+# date available in the selection.
 def render_date_filter(dataframes, key):
     """Render a date range slider with start and end date fields and return the selected pandas timestamps."""
     date_values = [
@@ -27,7 +27,11 @@ def render_date_filter(dataframes, key):
         for dataframe in dataframes
         if "Date" in dataframe.columns
     ]
-    valid_dates = pd.concat(date_values).dropna() if date_values else pd.Series(dtype="datetime64[ns]")
+    valid_dates = (
+        pd.concat(date_values).dropna()
+        if date_values
+        else pd.Series(dtype="datetime64[ns]")
+    )
 
     if valid_dates.empty:
         st.info("No dates are available for this filter.")
@@ -100,23 +104,29 @@ def render_date_filter(dataframes, key):
 
     return pd.Timestamp(start_date), pd.Timestamp(end_date)
 
-#Filter to select the rows of the database that fall within the selected date range.
+
+# Filter to select the rows of the database that fall within the selected date range.
 def filter_by_date(dataframe, start_date, end_date):
     """Keep rows whose Date falls inside the selected inclusive date range."""
     if start_date is None or end_date is None or "Date" not in dataframe.columns:
         return dataframe.iloc[0:0]
     dates = pd.to_datetime(dataframe["Date"], errors="coerce")
     end_exclusive = end_date + pd.Timedelta(days=1)
-    return dataframe.loc[
-        dates.ge(start_date) & dates.lt(end_exclusive)
-    ].copy()
+    return dataframe.loc[dates.ge(start_date) & dates.lt(end_exclusive)].copy()
 
 
-#Function to draw a price index chart: one line per supermarket and a grey comparison line
-#(such as the CPI or cao wages), all rescaled to 100 in the base month by chain_price_index()
-#in data_access.py.
-def draw_price_index_chart(price_index, comparison_index, selected_supermarkets, category,
-                           comparison_name, comparison_short, comparison_caption):
+# Function to draw a price index chart: one line per supermarket and a grey comparison line
+# (such as the CPI or cao wages), all rescaled to 100 in the base month by chain_price_index()
+# in data_access.py.
+def draw_price_index_chart(
+    price_index,
+    comparison_index,
+    selected_supermarkets,
+    category,
+    comparison_name,
+    comparison_short,
+    comparison_caption,
+):
     if price_index.empty:
         st.info("No price data is available for this selection.")
         return
@@ -133,7 +143,9 @@ def draw_price_index_chart(price_index, comparison_index, selected_supermarkets,
     if not late_starters.empty:
         st.caption(
             f"Starts later, at the {comparison_short} level of its first month: "
-            + ", ".join(f"{name} ({month:%B %Y})" for name, month in late_starters.items())
+            + ", ".join(
+                f"{name} ({month:%B %Y})" for name, month in late_starters.items()
+            )
             + "."
         )
 
@@ -144,55 +156,61 @@ def draw_price_index_chart(price_index, comparison_index, selected_supermarkets,
 
     # Comparison line rescaled to 100 in the same base month
     if comparison_index.empty:
-        st.caption(f"{comparison_name} is not available for {base_month:%B %Y}, so it is not shown.")
+        st.caption(
+            f"{comparison_name} is not available for {base_month:%B %Y}, so it is not shown."
+        )
     else:
-        fig.add_trace(go.Scatter(
-            x=comparison_index["Date"],
-            y=comparison_index["Index"],
-            mode="lines",
-            name=comparison_name,
-            line={"color": "#888780", "width": 4},
-            opacity=0.6,
-            hovertemplate=f"{comparison_name}: %{{y:.1f}}<extra></extra>"
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=comparison_index["Date"],
+                y=comparison_index["Index"],
+                mode="lines",
+                name=comparison_name,
+                line={"color": "#888780", "width": 4},
+                opacity=0.6,
+                hovertemplate=f"{comparison_name}: %{{y:.1f}}<extra></extra>",
+            )
+        )
 
     for supermarket_name, data in price_index.groupby("SupermarketName"):
         notes = np.where(
             data["LowReliability"],
             f"<br>fewer than {db.MIN_COMPARABLE_PRODUCTS} comparable products",
-            ""
+            "",
         )
         notes = notes + np.where(
             (data["PriceChanges"] == 0) & (data["Products"] > 0),
             "<br>no price changes this month",
-            ""
+            "",
         )
-        fig.add_trace(go.Scatter(
-            x=data["Date"],
-            y=data["Index"],
-            mode="lines+markers",
-            name=supermarket_name,
-            line={"color": colours.get(supermarket_name), "width": 2},
-            # Less reliable months get a lighter dot
-            marker={
-                "color": colours.get(supermarket_name),
-                "size": 6,
-                "opacity": np.where(data["LowReliability"], 0.3, 1).tolist()
-            },
-            customdata=list(zip(data["Products"].astype(int), notes)),
-            hovertemplate=(
-                f"{supermarket_name}: %{{y:.1f}}"
-                "<br>based on %{customdata[0]:,.0f} comparable products"
-                "%{customdata[1]}<extra></extra>"
+        fig.add_trace(
+            go.Scatter(
+                x=data["Date"],
+                y=data["Index"],
+                mode="lines+markers",
+                name=supermarket_name,
+                line={"color": colours.get(supermarket_name), "width": 2},
+                # Less reliable months get a lighter dot
+                marker={
+                    "color": colours.get(supermarket_name),
+                    "size": 6,
+                    "opacity": np.where(data["LowReliability"], 0.3, 1).tolist(),
+                },
+                customdata=list(zip(data["Products"].astype(int), notes)),
+                hovertemplate=(
+                    f"{supermarket_name}: %{{y:.1f}}"
+                    "<br>based on %{customdata[0]:,.0f} comparable products"
+                    "%{customdata[1]}<extra></extra>"
+                ),
             )
-        ))
+        )
 
     fig.update_layout(
         title=f"Price index: {category.lower()} compared with {comparison_short} ({base_month:%B %Y} = 100)",
         xaxis_title="Month",
         yaxis_title=f"Index ({base_month:%b %Y} = 100)",
         legend_title=f"Supermarket / {comparison_short}",
-        hovermode="x unified"
+        hovermode="x unified",
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -233,7 +251,7 @@ st.markdown(
     }
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 # The selected page is remembered between reruns; the dashboard opens on Overview
@@ -249,7 +267,9 @@ def select_page(name):
 
 with st.sidebar:
     st.title("Food Security Dashboard")
-    st.caption("Monitoring supermarket affordability and accessibility in the Netherlands")
+    st.caption(
+        "Monitoring supermarket affordability and accessibility in the Netherlands"
+    )
 
     # Four tiles in a 2 x 2 grid; the tile of the selected page is highlighted
     tile_columns = st.columns(2)
@@ -262,7 +282,7 @@ with st.sidebar:
                 type="primary" if st.session_state.page == name else "secondary",
                 use_container_width=True,
                 on_click=select_page,
-                args=(name,)
+                args=(name,),
             )
 
     st.divider()
@@ -283,7 +303,7 @@ try:
     if page == "Municipalities":
         municipalities = db.load_municipalities()
 
-#Exception handling for database connection issues, or data loading errors.
+# Exception handling for database connection issues, or data loading errors.
 except Exception as e:
     st.error(f"Could not load data from the database: {e}")
     st.stop()
@@ -312,7 +332,7 @@ if page == "Overview":
         economyStatistics, overview_start, overview_end
     )
 
-# Use the most recent month with basket prices
+    # Use the most recent month with basket prices
     if filtered_overview_basket.empty:
         basket_prices = filtered_overview_basket
     else:
@@ -324,17 +344,14 @@ if page == "Overview":
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric(
-            label="Supermarket chains",
-            value=len(supermarkets)
-        )
+        st.metric(label="Supermarket chains", value=len(supermarkets))
 
-# Market shares are only shown once they have been filled in the database
+    # Market shares are only shown once they have been filled in the database
     with col2:
         if supermarkets["MarketShare"].notna().any():
             st.metric(
                 label="Combined market share",
-                value=f"{supermarkets['MarketShare'].sum():.0f}%"
+                value=f"{supermarkets['MarketShare'].sum():.0f}%",
             )
         else:
             st.metric(label="Combined market share", value="n/a")
@@ -345,7 +362,7 @@ if page == "Overview":
         else:
             st.metric(
                 label="Average basket price",
-                value=f"€{basket_prices['Price'].mean():.2f}"
+                value=f"€{basket_prices['Price'].mean():.2f}",
             )
 
     st.subheader("Basket prices per supermarket")
@@ -366,9 +383,9 @@ if page == "Overview":
             labels={
                 "Price": "Basket price (€)",
                 "SupermarketName": "Supermarket",
-                "Products": "Basket products"
+                "Products": "Basket products",
             },
-            title=f"Basket price per supermarket ({latest_date:%B %Y})"
+            title=f"Basket price per supermarket ({latest_date:%B %Y})",
         )
 
         st.plotly_chart(fig, use_container_width=True)
@@ -381,7 +398,9 @@ if page == "Overview":
     st.subheader("Average basket price per supermarket compared to increase of income")
 
     if filtered_overview_basket.empty or filtered_overview_economy.empty:
-        st.info("Not enough basket price and income data is available for this comparison.")
+        st.info(
+            "Not enough basket price and income data is available for this comparison."
+        )
     else:
         basket_comparison = filtered_overview_basket.copy()
         income_comparison = filtered_overview_economy.copy()
@@ -391,9 +410,9 @@ if page == "Overview":
         # Income is stored as a monthly series; calculate its increase from
         # the previous month before combining it with the basket prices.
         income_comparison = income_comparison.sort_values("Date")
-        income_comparison["IncomeIncreasePerMonth"] = (
-            income_comparison["AverageDisposableIncome"].diff()
-        )
+        income_comparison["IncomeIncreasePerMonth"] = income_comparison[
+            "AverageDisposableIncome"
+        ].diff()
 
         comparison_fig = make_subplots(specs=[[{"secondary_y": True}]])
 
@@ -405,9 +424,9 @@ if page == "Overview":
                     x=supermarket_data["Date"],
                     y=supermarket_data["Price"],
                     mode="lines+markers",
-                    name=supermarket_name
+                    name=supermarket_name,
                 ),
-                secondary_y=False
+                secondary_y=False,
             )
 
         comparison_fig.add_trace(
@@ -416,15 +435,15 @@ if page == "Overview":
                 y=income_comparison["IncomeIncreasePerMonth"],
                 mode="lines+markers",
                 name="Income increase per month",
-                line={"dash": "dash", "color": "black"}
+                line={"dash": "dash", "color": "black"},
             ),
-            secondary_y=True
+            secondary_y=True,
         )
 
         comparison_fig.update_layout(
             title="Monthly basket price compared with income increase",
             xaxis_title="Month",
-            hovermode="x unified"
+            hovermode="x unified",
         )
         comparison_fig.update_yaxes(
             title_text="Average basket price (€)", secondary_y=False
@@ -446,7 +465,7 @@ elif page == "Prices":
     st.header("Supermarket Prices")
     st.write("Compare supermarket prices and monitor changes over time.")
 
-# Filters (in the sidebar)
+    # Filters (in the sidebar)
     with st.sidebar:
         prices_start, prices_end = render_date_filter(
             [basket_prices_monthly, price_index_links], "prices"
@@ -454,12 +473,12 @@ elif page == "Prices":
         selected_supermarkets = st.multiselect(
             "Select supermarkets",
             supermarkets["Name"].tolist(),
-            default=supermarkets["Name"].tolist()
+            default=supermarkets["Name"].tolist(),
         )
 
-# Products are grouped into shared categories (see code/importer/categories), so the
-# same category can be compared between supermarkets. The list only contains the
-# categories of the selected supermarkets. An empty selection includes every category.
+    # Products are grouped into shared categories (see code/importer/categories), so the
+    # same category can be compared between supermarkets. The list only contains the
+    # categories of the selected supermarkets. An empty selection includes every category.
     available_index_links = price_index_links[
         price_index_links["SupermarketName"].isin(selected_supermarkets)
     ]
@@ -473,8 +492,7 @@ elif page == "Prices":
         )
         if available_index_links["IsFood"].fillna(False).any():
             category_options = [db.ALL_FOOD] + [
-                category for category in category_options
-                if category != db.ALL_FOOD
+                category for category in category_options if category != db.ALL_FOOD
             ]
         selected_categories = st.multiselect(
             "Select categories",
@@ -482,7 +500,7 @@ elif page == "Prices":
             default=[],
             placeholder="All categories — type to filter",
             filter_mode="contains",
-            key="price_categories"
+            key="price_categories",
         )
         selected_products = st.multiselect(
             "Select products",
@@ -490,11 +508,11 @@ elif page == "Prices":
             default=[],
             placeholder="All products — type to filter",
             filter_mode="contains",
-            key="price_products"
+            key="price_products",
         )
 
-# Recalculate only the CPI and wage index dataset from the active product and
-# category filters. Other visuals retain their original scope.
+    # Recalculate only the CPI and wage index dataset from the active product and
+    # category filters. Other visuals retain their original scope.
     if selected_products:
         visual_index_links = db.load_price_index_links(tuple(selected_products))
     else:
@@ -511,22 +529,24 @@ elif page == "Prices":
     )
 
     category_label = (
-        "All categories" if not selected_categories
-        else selected_categories[0] if len(selected_categories) == 1
-        else f"{len(selected_categories)} selected categories"
+        "All categories"
+        if not selected_categories
+        else (
+            selected_categories[0]
+            if len(selected_categories) == 1
+            else f"{len(selected_categories)} selected categories"
+        )
     )
 
-# Essential basket metrics and price development are independent of the product
-# and category filters.
+    # Essential basket metrics and price development are independent of the product
+    # and category filters.
     filtered_basket = basket_prices_monthly[
         basket_prices_monthly["SupermarketName"].isin(selected_supermarkets)
     ]
     filtered_basket = filter_by_date(filtered_basket, prices_start, prices_end)
-    basket_totals = filtered_basket[
-        filtered_basket["Date"] == filtered_basket["Date"].max()
-    ].set_index("SupermarketName")["Price"]
+    basket_totals = filtered_basket["Price"]
 
-# Only show the price metrics when data is available
+    # Only show the price metrics when data is available
 
     if not basket_totals.empty:
 
@@ -534,25 +554,18 @@ elif page == "Prices":
 
         with col1:
             st.metric(
-                label="Average basket price",
-                value=f"€{basket_totals.mean():.2f}"
+                label="Average basket price", value=f"€{basket_totals.mean():.2f}"
             )
 
         with col2:
-            st.metric(
-                label="Lowest basket price",
-                value=f"€{basket_totals.min():.2f}"
-            )
+            st.metric(label="Lowest basket price", value=f"€{basket_totals.min():.2f}")
 
         with col3:
-            st.metric(
-                label="Highest basket price",
-                value=f"€{basket_totals.max():.2f}"
-            )
+            st.metric(label="Highest basket price", value=f"€{basket_totals.max():.2f}")
 
     st.subheader("Price development over time")
 
-# Basket prices for each supermarket over time
+    # Basket prices for each supermarket over time
     if filtered_basket.empty:
         st.info(
             "The essential basket price will appear here once basket products "
@@ -569,26 +582,27 @@ elif page == "Prices":
             labels={
                 "Date": "Month",
                 "Price": "Basket price (€)",
-                "SupermarketName": "Supermarket"
-            }
+                "SupermarketName": "Supermarket",
+            },
         )
 
         st.plotly_chart(fig, use_container_width=True)
 
-
     st.subheader("Price comparison")
 
-# An empty product selection means all linked product clusters in the active
-# category and supermarket filters. Selecting products restricts the table to
-# those cluster names.
+    # An empty product selection means all linked product clusters in the active
+    # category and supermarket filters. Selecting products restricts the table to
+    # those cluster names.
     product_results = db.load_product_prices(
-        tuple(selected_products), tuple(selected_supermarkets), tuple(selected_categories)
+        tuple(selected_products),
+        tuple(selected_supermarkets),
+        tuple(selected_categories),
     )
 
     if product_results.empty:
         st.write("No products found for the selected filters.")
     else:
-# Display one row per linked product cluster and its latest price per supermarket
+        # Display one row per linked product cluster and its latest price per supermarket
         st.dataframe(
             product_results,
             use_container_width=True,
@@ -596,39 +610,49 @@ elif page == "Prices":
             column_config={
                 supermarket: st.column_config.NumberColumn(format="€%.2f")
                 for supermarket in ["Albert Heijn", "Jumbo", "Lidl", "Plus"]
-            }
+            },
         )
 
     st.subheader("Price index compared with CPI")
 
-# Price index of the same products per supermarket, compared with the CPI, calculated in
-# data_access.py. Unlike an average price, it does not jump when products are added.
-# The first month shown is the base month (100); a supermarket whose data starts later
-# starts at the CPI level of its first month.
+    # Price index of the same products per supermarket, compared with the CPI, calculated in
+    # data_access.py. Unlike an average price, it does not jump when products are added.
+    # The first month shown is the base month (100); a supermarket whose data starts later
+    # starts at the CPI level of its first month.
     price_index, cpi_index = db.chain_price_index(
-        filtered_index_links, tuple(selected_categories), selected_supermarkets,
-        economyStatistics[["Date", "CPI"]].rename(columns={"CPI": "Value"})
+        filtered_index_links,
+        tuple(selected_categories),
+        selected_supermarkets,
+        economyStatistics[["Date", "CPI"]].rename(columns={"CPI": "Value"}),
     )
     draw_price_index_chart(
-        price_index, cpi_index, selected_supermarkets, category_label,
+        price_index,
+        cpi_index,
+        selected_supermarkets,
+        category_label,
         comparison_name="CPI (all items)",
         comparison_short="CPI",
         comparison_caption=(
             "The grey line is the consumer price index (CPI, all goods and services, CBS), "
             "rescaled to 100 in the same base month."
-        )
+        ),
     )
 
     st.subheader("Price index compared with cao wages")
 
-# The same price index, compared with collective (cao) wages. The wage line is built from
-# the stored yearly cao wage increase (YearlyWageIncrease), see data_access.py.
+    # The same price index, compared with collective (cao) wages. The wage line is built from
+    # the stored yearly cao wage increase (YearlyWageIncrease), see data_access.py.
     price_index, wage_index = db.chain_price_index(
-        filtered_index_links, tuple(selected_categories), selected_supermarkets,
-        db.wage_level_from_yearly_increase(economyStatistics)
+        filtered_index_links,
+        tuple(selected_categories),
+        selected_supermarkets,
+        db.wage_level_from_yearly_increase(economyStatistics),
     )
     draw_price_index_chart(
-        price_index, wage_index, selected_supermarkets, category_label,
+        price_index,
+        wage_index,
+        selected_supermarkets,
+        category_label,
         comparison_name="Cao wages (estimate)",
         comparison_short="cao wages",
         comparison_caption=(
@@ -637,19 +661,19 @@ elif page == "Prices":
             "estimate built from the yearly cao wage increase of each month: CBS raises cao "
             "wages mostly in January and July, so the real wage level rises in steps, while "
             "this line spreads each increase evenly over the year."
-        )
+        ),
     )
 
     st.subheader("Price change per category")
 
-# Percentage price change of the same products per food category and supermarket over
-# one common period (KPI: % price change per category of products), calculated in
-# data_access.py. The calculation follows the active date, supermarket, category and
-# product filters.
+    # Percentage price change of the same products per food category and supermarket over
+    # one common period (KPI: % price change per category of products), calculated in
+    # data_access.py. The calculation follows the active date, supermarket, category and
+    # product filters.
     category_changes, change_start, change_end = db.category_price_changes(
         filtered_index_links,
         selected_supermarkets,
-        include_all_food=db.ALL_FOOD in selected_categories
+        include_all_food=db.ALL_FOOD in selected_categories,
     )
 
     if category_changes.empty:
@@ -659,7 +683,8 @@ elif page == "Prices":
         # combined result on top.
         order = (
             category_changes[category_changes["Category"] != db.ALL_FOOD]
-            .groupby("Category")["Change"].mean()
+            .groupby("Category")["Change"]
+            .mean()
             .sort_values(ascending=False)
             .index.tolist()
         )
@@ -669,36 +694,47 @@ elif page == "Prices":
         colours = dict(zip(supermarkets["Name"], px.colors.qualitative.Plotly))
         change_fig = go.Figure()
         for supermarket_name in selected_supermarkets:
-            data = category_changes[category_changes["SupermarketName"] == supermarket_name]
+            data = category_changes[
+                category_changes["SupermarketName"] == supermarket_name
+            ]
             if data.empty:
                 continue
-            data = data.set_index("Category").reindex(order).dropna(subset=["Change"]).reset_index()
+            data = (
+                data.set_index("Category")
+                .reindex(order)
+                .dropna(subset=["Change"])
+                .reset_index()
+            )
             notes = np.where(
                 data["LowReliability"],
                 f"<br>fewer than {db.MIN_COMPARABLE_PRODUCTS} comparable products",
-                ""
+                "",
             )
             # A supermarket whose data starts later covers a shorter period
             supermarket_start = data["StartMonth"].iloc[0]
             if supermarket_start > change_start:
-                notes = notes + f"<br>from {supermarket_start:%B %Y} (data starts later)"
-            change_fig.add_trace(go.Bar(
-                x=data["Change"],
-                y=data["Category"],
-                orientation="h",
-                name=supermarket_name,
-                # Less reliable bars are lighter
-                marker={
-                    "color": colours.get(supermarket_name),
-                    "opacity": np.where(data["LowReliability"], 0.35, 1).tolist()
-                },
-                customdata=list(zip(data["Products"].round(0).astype(int), notes)),
-                hovertemplate=(
-                    f"{supermarket_name}: %{{x:+.1f}}%"
-                    "<br>on average %{customdata[0]:,.0f} comparable products per month"
-                    "%{customdata[1]}<extra></extra>"
+                notes = (
+                    notes + f"<br>from {supermarket_start:%B %Y} (data starts later)"
                 )
-            ))
+            change_fig.add_trace(
+                go.Bar(
+                    x=data["Change"],
+                    y=data["Category"],
+                    orientation="h",
+                    name=supermarket_name,
+                    # Less reliable bars are lighter
+                    marker={
+                        "color": colours.get(supermarket_name),
+                        "opacity": np.where(data["LowReliability"], 0.35, 1).tolist(),
+                    },
+                    customdata=list(zip(data["Products"].round(0).astype(int), notes)),
+                    hovertemplate=(
+                        f"{supermarket_name}: %{{x:+.1f}}%"
+                        "<br>on average %{customdata[0]:,.0f} comparable products per month"
+                        "%{customdata[1]}<extra></extra>"
+                    ),
+                )
+            )
 
         change_fig.update_layout(
             title=(
@@ -706,22 +742,29 @@ elif page == "Prices":
             ),
             barmode="group",
             xaxis_title="Price change of the same products (%)",
-            yaxis={"categoryorder": "array", "categoryarray": order[::-1], "title": None},
+            yaxis={
+                "categoryorder": "array",
+                "categoryarray": order[::-1],
+                "title": None,
+            },
             legend_title="Supermarket",
             height=max(450, 45 * len(order)),
-            bargap=0.25
+            bargap=0.25,
         )
         change_fig.add_vline(x=0, line_width=1, line_color="#888780")
 
         # Supermarkets whose data starts after the start of the date range
-        late_starters = (
-            category_changes.groupby("SupermarketName")["StartMonth"].first()
-        )
+        late_starters = category_changes.groupby("SupermarketName")[
+            "StartMonth"
+        ].first()
         late_starters = late_starters[late_starters > change_start]
         if not late_starters.empty:
             st.caption(
                 "Shorter period, because the data starts later: "
-                + ", ".join(f"{name} (from {month:%B %Y})" for name, month in late_starters.items())
+                + ", ".join(
+                    f"{name} (from {month:%B %Y})"
+                    for name, month in late_starters.items()
+                )
                 + ". Its bars cannot be compared one-to-one with the other supermarkets."
             )
 
@@ -742,12 +785,8 @@ elif page == "Prices":
 elif page == "Economy":
     st.header("Citizen Economy")
     with st.sidebar:
-        economy_start, economy_end = render_date_filter(
-            [economyStatistics], "economy"
-        )
-    filtered_economy = filter_by_date(
-        economyStatistics, economy_start, economy_end
-    )
+        economy_start, economy_end = render_date_filter([economyStatistics], "economy")
+    filtered_economy = filter_by_date(economyStatistics, economy_start, economy_end)
 
     col1, col2 = st.columns(2)
     with col1:
@@ -757,11 +796,8 @@ elif page == "Economy":
             y="CPI",
             markers=True,
             title="Consumer Price Index (CPI, 2015 = 100)",
-            labels={
-            "Date": "Month",
-            "CPI": "Consumer Price Index (CPI)"
-            },
-            line_shape='spline'
+            labels={"Date": "Month", "CPI": "Consumer Price Index (CPI)"},
+            line_shape="spline",
         )
         CPI_Line.update_traces(line_smoothing=0.75)  # Adjust smoothing factor
         st.plotly_chart(CPI_Line, use_container_width=True)
@@ -776,9 +812,9 @@ elif page == "Economy":
             title="Monthly Rate of Change in CPI",
             labels={
                 "Date": "Month",
-                "CPIMonthlyRateOfChange": "Change on the previous month (%)"
+                "CPIMonthlyRateOfChange": "Change on the previous month (%)",
             },
-            line_shape='spline'
+            line_shape="spline",
         )
         CPI_Monthly_Rate.update_traces(line_smoothing=0.75)  # Adjust smoothing factor
         st.plotly_chart(CPI_Monthly_Rate, use_container_width=True)
@@ -791,27 +827,28 @@ elif page == "Economy":
             mode="lines+markers",
             name="CPI Yearly Rate of Change",
             line={
-            'shape': 'spline',
-            'smoothing': 0.75,  # Range is from 0 to 1.3
-        }),
-        secondary_y=False
-        )
+                "shape": "spline",
+                "smoothing": 0.75,  # Range is from 0 to 1.3
+            },
+        ),
+        secondary_y=False,
+    )
 
     income_cpi_increase_compare.add_trace(
         go.Scatter(
             x=filtered_economy["Date"],
             y=filtered_economy["AverageDisposableIncome"],
             mode="lines",
-            name="Average Disposable Income"
+            name="Average Disposable Income",
         ),
-        secondary_y=True
+        secondary_y=True,
     )
     income_cpi_increase_compare.update_layout(
         title="CPI Yearly Rate of Change (inflation) vs Average Disposable Income",
         xaxis_title="Month",
         yaxis_title="CPI change on a year earlier (%)",
         yaxis2_title="Average Disposable Income (€)",
-        legend=dict(x=0.01, y=1.5, bordercolor="Black", borderwidth=1)
+        legend=dict(x=0.01, y=1.5, bordercolor="Black", borderwidth=1),
     )
     st.plotly_chart(income_cpi_increase_compare, use_container_width=True)
 
@@ -831,41 +868,45 @@ elif page == "Municipalities":
 
     st.write("Explore supermarket accessibility across Dutch municipalities.")
 
-# Calculate accessibility score using 1km, 3km and 5km
+    # Calculate accessibility score using 1km, 3km and 5km
     municipalities["AccessibilityScore"] = (
         municipalities["SupermarketsWithin1KM"] * 1.0
-        + (municipalities["SupermarketsWithin3KM"]
-           - municipalities["SupermarketsWithin1KM"]) * 0.75
-        + (municipalities["SupermarketsWithin5KM"]
-           - municipalities["SupermarketsWithin3KM"]) * 0.5
+        + (
+            municipalities["SupermarketsWithin3KM"]
+            - municipalities["SupermarketsWithin1KM"]
+        )
+        * 0.75
+        + (
+            municipalities["SupermarketsWithin5KM"]
+            - municipalities["SupermarketsWithin3KM"]
+        )
+        * 0.5
     )
 
-
-
-# KPI metrics
+    # KPI metrics
     col1, col2, col3 = st.columns(3)
 
     with col1:
         st.metric(
             label="Average accessibility score",
-            value=f"{municipalities['AccessibilityScore'].mean():.1f}"
+            value=f"{municipalities['AccessibilityScore'].mean():.1f}",
         )
 
     with col2:
         st.metric(
             label="Average distance to closest supermarket",
-            value=f"{municipalities['DistanceClosestSupermarket'].mean():.2f} km"
+            value=f"{municipalities['DistanceClosestSupermarket'].mean():.2f} km",
         )
 
     with col3:
         st.metric(
             label="Lowest accessibility score",
-            value=f"{municipalities['AccessibilityScore'].min():.1f}"
+            value=f"{municipalities['AccessibilityScore'].min():.1f}",
         )
 
-# Retrieve municipality boundaries from PDOK
-# The map uses our calculated accessibility score per 10,000 residents
-# Green indicates higher scores and red indicates lower scores
+    # Retrieve municipality boundaries from PDOK
+    # The map uses our calculated accessibility score per 10,000 residents
+    # Green indicates higher scores and red indicates lower scores
     st.subheader("Supermarket Accessibility by Municipality")
 
     geojson_url = (
@@ -877,12 +918,15 @@ elif page == "Municipalities":
     cached_municipality_geojson = "municipalities.geojson"
     try:
         try:
-            if (os.path.exists(cached_municipality_geojson) and
-                os.path.getsize(cached_municipality_geojson) > 0 and
-                time.time() - os.path.getmtime(cached_municipality_geojson) < 60 * 60 * 24 * 30):
+            if (
+                os.path.exists(cached_municipality_geojson)
+                and os.path.getsize(cached_municipality_geojson) > 0
+                and time.time() - os.path.getmtime(cached_municipality_geojson)
+                < 60 * 60 * 24 * 30
+            ):
                 with open(cached_municipality_geojson, "r") as f:
                     geojson_data = json.loads(f.read())
-            else: 
+            else:
                 response = requests.get(geojson_url, timeout=15)
                 response.raise_for_status()
                 geojson_data = response.json()
@@ -891,12 +935,11 @@ elif page == "Municipalities":
                     json.dump(geojson_data, f)
         except requests.RequestException as e:
             print("Warning: could not fetch live municipality geodata.")
-            geojson_data  = ""
+            geojson_data = ""
             # use static geojson data from the local file if the request fails
             with open(cached_municipality_geojson, "r") as f:
                 geojson_data = json.loads(f.read())
             raise
-
 
         fig = px.choropleth_mapbox(
             municipalities,
@@ -907,7 +950,7 @@ elif page == "Municipalities":
             color_continuous_scale=[
                 [0.0, "#d73027"],  # Red: poor accessibility
                 [0.5, "#fee08b"],  # Yellow: moderate accessibility
-                [1.0, "#1a9850"]   # Green: good accessibility
+                [1.0, "#1a9850"],  # Green: good accessibility
             ],
             range_color=(0, 5),
             mapbox_style="open-street-map",
@@ -919,11 +962,9 @@ elif page == "Municipalities":
                 "SupermarketsWithin1KM",
                 "SupermarketsWithin3KM",
                 "SupermarketsWithin5KM",
-                "DistanceClosestSupermarket"
+                "DistanceClosestSupermarket",
             ],
-            labels={
-                "AccessibilityScore": "Accessibility Score"
-            }
+            labels={"AccessibilityScore": "Accessibility Score"},
         )
 
         st.plotly_chart(fig, use_container_width=True)
@@ -931,9 +972,8 @@ elif page == "Municipalities":
     except Exception as e:
         st.error(f"Map could not be loaded: {e}")
 
-
-# Compare municipality population with supermarket accessibility
-# This helps identify municipalities with relatively low accessibility scores
+    # Compare municipality population with supermarket accessibility
+    # This helps identify municipalities with relatively low accessibility scores
     st.subheader("Municipality Comparison")
 
     fig = px.scatter(
@@ -944,14 +984,14 @@ elif page == "Municipalities":
         title="Supermarket Accessibility Compared to Population",
         labels={
             "Population": "Municipality population",
-            "AccessibilityScore": "Accessibility score"
-        }
+            "AccessibilityScore": "Accessibility score",
+        },
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
-# Display the municipality data and calculated accessibility scores in a table
-# Users can inspect the values behind the map and scatter plot
+    # Display the municipality data and calculated accessibility scores in a table
+    # Users can inspect the values behind the map and scatter plot
     st.subheader("Municipality Data")
 
     st.dataframe(
@@ -965,8 +1005,8 @@ elif page == "Municipalities":
                 "SupermarketsWithin1KM",
                 "SupermarketsWithin3KM",
                 "SupermarketsWithin5KM",
-                "AccessibilityScore"
+                "AccessibilityScore",
             ]
         ],
-        use_container_width=True
+        use_container_width=True,
     )
