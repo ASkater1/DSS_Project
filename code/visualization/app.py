@@ -202,7 +202,7 @@ def draw_price_index_chart(price_index, comparison_index, selected_supermarkets,
         legend_title=f"Supermarket / {comparison_short}",
         hovermode="x unified"
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     has_projection = not projected.empty or (
         comparison_projection is not None and not comparison_projection.empty
@@ -295,7 +295,7 @@ with st.sidebar:
                 f"{icon} {name}",
                 key=f"tile_{name}",
                 type="primary" if st.session_state.page == name else "secondary",
-                use_container_width=True,
+                width='stretch',
                 on_click=select_page,
                 args=(name,)
             )
@@ -453,7 +453,7 @@ if page == "Overview":
                 margin={"t": 70},
                 hovermode="x unified"
             )
-            st.plotly_chart(share_fig, use_container_width=True)
+            st.plotly_chart(share_fig, width='stretch')
 
             st.caption(
                 "Share of each chain in Dutch supermarket sales per year, "
@@ -513,7 +513,7 @@ if page == "Overview":
                 margin={"t": 50},
                 hovermode="x unified"
             )
-            st.plotly_chart(food_income_fig, use_container_width=True)
+            st.plotly_chart(food_income_fig, width='stretch')
 
             st.caption(
                 "Food prices (CBS) and average disposable household income, both set to 100 in "
@@ -577,7 +577,7 @@ if page == "Overview":
             hovermode="x unified"
         )
 
-        st.plotly_chart(affordability_fig, use_container_width=True)
+        st.plotly_chart(affordability_fig, width='stretch')
         st.caption(
             "The basket price of each supermarket as a percentage of the average monthly "
             "disposable household income. A higher line means groceries take a bigger part of "
@@ -714,7 +714,7 @@ elif page == "Prices":
             }
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 
     st.subheader("Price comparison")
@@ -732,7 +732,7 @@ elif page == "Prices":
 # Display one row per linked product cluster and its latest price per supermarket
         st.dataframe(
             product_results,
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             column_config={
                 supermarket: st.column_config.NumberColumn(format="€%.2f")
@@ -858,7 +858,7 @@ elif page == "Prices":
         )
         change_fig.add_vline(x=0, line_width=1, line_color="#888780")
 
-        st.plotly_chart(change_fig, use_container_width=True)
+        st.plotly_chart(change_fig, width='stretch')
 
         st.caption(
             "Each bar shows how much the prices of the same products in a food category "
@@ -930,7 +930,7 @@ elif page == "Economy":
             line_shape='spline'
         )
         CPI_Line.update_traces(line_smoothing=0.75)  # Adjust smoothing factor
-        st.plotly_chart(CPI_Line, use_container_width=True)
+        st.plotly_chart(CPI_Line, width='stretch')
 
     with col2:
         # Display the CPI change on the previous month with a smoothed line
@@ -947,7 +947,7 @@ elif page == "Economy":
             line_shape='spline'
         )
         CPI_Monthly_Rate.update_traces(line_smoothing=0.75)  # Adjust smoothing factor
-        st.plotly_chart(CPI_Monthly_Rate, use_container_width=True)
+        st.plotly_chart(CPI_Monthly_Rate, width='stretch')
 
 # MUNICIPALITIES PAGE
 elif page == "Municipalities":
@@ -1057,7 +1057,7 @@ elif page == "Municipalities":
             }
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     except Exception as e:
         st.error(f"Map could not be loaded: {e}")
@@ -1078,7 +1078,7 @@ elif page == "Municipalities":
         }
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 # Display the municipality data and calculated accessibility scores in a table
     st.subheader("Municipality Data")
@@ -1097,5 +1097,5 @@ elif page == "Municipalities":
                 "AccessibilityScore"
             ]
         ],
-        use_container_width=True
+        width='stretch'
     )
