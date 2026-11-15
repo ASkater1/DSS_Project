@@ -126,9 +126,9 @@ if __name__ == "__main__":
             "DB_PASSWORD environment variable not set. Please set it in the .env file."
         )
     )
-    print(
-        f"DB login information: postgresql://{db_user}:{db_password}@{db_host}:5432/{db_name}"
-    )
+    #print(
+    #    f"DB login information: postgresql://{db_user}:{db_password}@{db_host}:5432/{db_name}"
+    #)
 
     # exit
 

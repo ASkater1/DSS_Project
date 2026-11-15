@@ -77,7 +77,7 @@ if __name__ == "__main__":
     db_name = os.environ["DB_NAME"] if "DB_NAME" in os.environ else exit("DB_NAME environment variable not set. Please set it in the .env file.")
     db_user = os.environ["DB_USER"] if "DB_USER" in os.environ else exit("DB_USER environment variable not set. Please set it in the .env file.")
     db_password = os.environ["DB_PASSWORD"] if "DB_PASSWORD" in os.environ else exit("DB_PASSWORD environment variable not set. Please set it in the .env file.")
-    print(f"DB login information: postgresql://{db_user}:{db_password}@{db_host}:5432/{db_name}")
+    #print(f"DB login information: postgresql://{db_user}:{db_password}@{db_host}:5432/{db_name}")
     exit
 
 
