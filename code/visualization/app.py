@@ -131,15 +131,6 @@ def draw_price_index_chart(price_index, comparison_index, selected_supermarkets,
     if missing:
         st.caption(f"No data for this category: {', '.join(missing)}.")
 
-    late_starters = price_index.groupby("SupermarketName")["Date"].min()
-    late_starters = late_starters[late_starters > base_month]
-    if not late_starters.empty:
-        st.caption(
-            f"Starts later, at the {comparison_short} level of its first month: "
-            + ", ".join(f"{name} ({month:%B %Y})" for name, month in late_starters.items())
-            + "."
-        )
-
     # Fixed colour per supermarket, so a supermarket keeps its colour when filtering
     colours = dict(zip(supermarkets["Name"], px.colors.qualitative.Plotly))
 
@@ -902,32 +893,6 @@ elif page == "Prices":
             bargap=0.25
         )
         change_fig.add_vline(x=0, line_width=1, line_color="#888780")
-
-        # Supermarkets whose data starts after the start of the date range
-        late_starters = (
-            category_changes.groupby("SupermarketName")["StartMonth"].first()
-        )
-        late_starters = late_starters[late_starters > change_start]
-        if not late_starters.empty:
-            st.caption(
-                "Shorter period, because the data starts later: "
-                + ", ".join(f"{name} (from {month:%B %Y})" for name, month in late_starters.items())
-                + ". Its bars cannot be compared one-to-one with the other supermarkets."
-            )
-
-        # The bars only use real price data, so a supermarket whose last real price change
-        # is before the end of the date range covers a shorter period (no projections)
-        last_real_months = (
-            filtered_index_links[filtered_index_links["IsFood"]]
-            .groupby("SupermarketName")["Date"].max()
-        )
-        early_enders = last_real_months[last_real_months < change_end]
-        if not early_enders.empty:
-            st.caption(
-                "Shorter period, because the real price data ends earlier: "
-                + ", ".join(f"{name} (until {month:%B %Y})" for name, month in early_enders.items())
-                + ". The bars only use real price data, not the projections of the index charts."
-            )
 
         st.plotly_chart(change_fig, use_container_width=True)
 
