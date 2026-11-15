@@ -69,26 +69,6 @@ services:
       database:
         condition: service_healthy
     restart: "no"
-  #modelling:
-  #  container_name: modelling
-  #  build: ./code/modelling/  # where to find the Dockerfile to construct the image
-  #  environment:
-  #    DB_PASSWORD: ${DB_PASSWORD}
-  #    DB_USER: ${DB_USER}
-  #    DB_NAME: ${DB_NAME}
-  #    DB_HOST: ${DB_HOST}
-  #  depends_on:
-  #    database:
-  #      condition: service_healthy
-  #    static_importer:
-  #      condition: service_completed_successfully
-  #    static_municipalities_importer:
-  #      condition: service_completed_successfully
-  #    product_link_importer:
-  #      condition: service_completed_successfully
-  #    live:
-  #      condition: service_completed_successfully
-  #  restart: "no"
   basket:
     container_name: basket
     build: ./code/basket/  # where to find the Dockerfile to construct the image
@@ -102,21 +82,9 @@ services:
         condition: service_healthy
       static_importer:
         condition: service_completed_successfully
-      #live:
-      #  condition: service_completed_successfully
+      category_importer:
+        condition: service_completed_successfully
     restart: "no"
-  #live:
-  #  container_name: live
-  #  build: ./code/importer/live  # where to find the Dockerfile to construct the image
-  #  environment:
-  #    DB_PASSWORD: ${DB_PASSWORD}
-  #    DB_USER: ${DB_USER}
-  #    DB_NAME: ${DB_NAME}
-  #    DB_HOST: ${DB_HOST}
-  #  depends_on:
-  #    database:
-  #      condition: service_healthy
-  #  restart: "no"
   visualization:
     container_name: dashboard
     build: ./code/visualization/
@@ -136,9 +104,8 @@ services:
           ignore:
             - "*.md"
             - "*.py"
-    # The dashboard starts last: it waits until the database is healthy and every importer
-    # that fills the data it shows has finished successfully. basket and modelling are not
-    # included yet, because the dashboard does not use their output.
+    # The dashboard starts last: it waits until the database is healthy and every other
+    # container has finished successfully.
     depends_on:
       database:
         condition: service_healthy
@@ -152,8 +119,10 @@ services:
         condition: service_completed_successfully
       financial_importer:
         condition: service_completed_successfully
-      #live:
-      #  condition: service_completed_successfully
+      basket:
+        condition: service_completed_successfully
+      product_link_importer:
+        condition: service_completed_successfully
     ports:
       - '${HTTP_PORT:-8501}:8501'
     restart: always

@@ -1,4 +1,4 @@
-#Required dependencies to execute the moddeling 
+#Required dependencies to execute the basket analysis
 pandas
 psycopg2-binary==2.9.9
 SQLAlchemy

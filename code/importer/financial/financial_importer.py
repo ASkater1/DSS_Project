@@ -5,15 +5,6 @@
 # Downloads monthly economic indicators for the Netherlands from the CBS Open Data API
 # and loads them into the EconomyStatistics table (one row per month, dated the 1st),
 # starting in START_MONTH.
-#
-#   83136NED  Consumentenprijzen; basisjaren vanaf 1969        -> CPI, CPIYearlyRateOfChange, CPIMonthlyRateOfChange (monthly)
-#   83932NED  Inkomen van huishoudens; huishoudenskenmerken   -> average gross, disposable and
-#                                                                standardized income (yearly, repeated
-#                                                                on every month of that year)
-#   85663NED  Cao-lonen, contractuele loonkosten en arbeidsduur -> yearlyWageIncrease (monthly)
-#   86141NED  Consumentenprijzen; CPI 2025=100, index en mutaties -> foodCPI,
-#             foodCPIYearlyRateOfChange (monthly, category food and soft drinks)
-
 
 # Importing necessary libraries
 import json
@@ -28,9 +19,6 @@ from urllib.request import urlopen
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
-
-
-
 
 
 # CBS Open Data API configuration
@@ -99,7 +87,6 @@ ADDED_COLUMNS = {
     "foodcpiyearlyrateofchange": "DECIMAL(4,1)"
 }
 
-
 # Function to download all pages of an endpoint from the CBS OData API
 def get_cbs_data(table: str, endpoint: str, params: dict | None = None) -> pd.DataFrame:
     url = f"{CBS_BASE_URL}/{table}/{endpoint}"
@@ -117,8 +104,6 @@ def get_cbs_data(table: str, endpoint: str, params: dict | None = None) -> pd.Da
         url = result.get("odata.nextLink") or result.get("@odata.nextLink")
 
     return pd.DataFrame(all_rows)
-
-
 
 # Function to find the CBS key that belongs to a category title in a dimension
 def get_category_key(table: str, dimension: str, title: str) -> str:
@@ -154,22 +139,14 @@ def get_topic_key(properties: pd.DataFrame, title: str, group: str | None = None
 
     return topics.iloc[0]["Key"]
 
-
-
 # Function to turn a yearly CBS period key ("2024JJ00") into its year (2024)
 def period_to_year(periods: pd.Series) -> pd.Series:
     return periods.astype(str).str.strip().str[:4].astype(int)
-
-
 
 # Function to turn a monthly CBS period key ("2024MM03") into a monthly period (2024-03)
 def period_to_month(periods: pd.Series) -> pd.Series:
     periods = periods.astype(str).str.strip()
     return pd.to_datetime(periods.str[:4] + "-" + periods.str[6:8] + "-01").dt.to_period("M")
-
-
-
-
 
 # Function to download the monthly CPI and compute its rate of change on a year earlier
 def load_cpi(start_year: int) -> pd.DataFrame:
@@ -243,8 +220,6 @@ def load_cpi(start_year: int) -> pd.DataFrame:
     })
     return cpi_data[cpi_data.index.year >= start_year]
 
-
-
 # Function to download yearly average incomes of all private households
 # (CBS only publishes these per year)
 def load_income(start_year: int) -> pd.DataFrame:
@@ -315,8 +290,6 @@ def load_wage_increase(start_year: int) -> pd.DataFrame:
     data["yearlywageincrease"] = pd.to_numeric(data[wage_key], errors="coerce").round(1)
     return data.set_index("month")[["yearlywageincrease"]]
 
-
-
 # Function to download the monthly CPI of food and soft drinks and its official change
 # compared with the same month a year earlier (CBS publishes this table with 2025 = 100)
 def load_food_cpi(start_year: int) -> pd.DataFrame:
@@ -341,15 +314,11 @@ def load_food_cpi(start_year: int) -> pd.DataFrame:
     data["foodcpiyearlyrateofchange"] = pd.to_numeric(data[yearly_change_key], errors="coerce").round(1)
     return data.set_index("month")[["foodcpi", "foodcpiyearlyrateofchange"]]
 
-
-
 # Function to determine the latest month to import from today's date. CBS publishes
 # a month's figures in the following month, so the current month is never complete.
 def get_latest_month(today: date | None = None) -> pd.Period:
     today = today or date.today()
     return pd.Period(today, freq="M") - 1
-
-
 
 # Function to combine all sources into rows that match the EconomyStatistics table
 def load_economy_statistics(start_month: pd.Period | None = None,
@@ -387,8 +356,6 @@ def load_economy_statistics(start_month: pd.Period | None = None,
     combined["date"] = [date(month.year, month.month, 1) for month in combined.index]
     return combined.reset_index(drop=True)[final_columns]
 
-
-
 # Function to check the quality of the combined data
 def check_data_quality(df: pd.DataFrame):
     print("Data Quality Report:")
@@ -407,8 +374,6 @@ def check_data_quality(df: pd.DataFrame):
                 f"{len(too_large)} value(s) in {column} exceed the column limit of {limit}"
             )
 
-
-
 # Function to read the months that are currently stored in the database
 def load_stored_statistics(db_conn, start_month: pd.Period) -> pd.DataFrame:
     query = text(f"""
@@ -425,8 +390,6 @@ def load_stored_statistics(db_conn, start_month: pd.Period) -> pd.DataFrame:
     for column in final_columns[1:]:
         stored[column] = pd.to_numeric(stored[column], errors="coerce").astype("float64")
     return stored
-
-
 
 # Function to find the months that are missing from the database or differ from CBS
 def find_outdated_months(latest: pd.DataFrame, stored: pd.DataFrame) -> pd.DataFrame:
@@ -456,8 +419,6 @@ def find_outdated_months(latest: pd.DataFrame, stored: pd.DataFrame) -> pd.DataF
 
     return merged.loc[is_new | is_changed, final_columns].reset_index(drop=True)
 
-
-
 # Function to find the project's .env file by walking up from this script
 def find_env_file() -> Path | None:
     for folder in Path(__file__).resolve().parents:
@@ -465,10 +426,6 @@ def find_env_file() -> Path | None:
         if candidate.is_file():
             return candidate
     return None
-
-
-
-
 
 # Main execution
 if __name__ == "__main__":
