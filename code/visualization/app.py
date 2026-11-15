@@ -8,6 +8,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
+import psycopg2
 
 import data_access as db
 
@@ -112,21 +113,19 @@ def filter_by_date(dataframe, start_date, end_date):
         return dataframe.iloc[0:0]
     dates = pd.to_datetime(dataframe["Date"], errors="coerce")
     end_exclusive = end_date + pd.Timedelta(days=1)
-    return dataframe.loc[dates.ge(start_date) & dates.lt(end_exclusive)].copy()
+
+    return dataframe.loc[
+        dates.ge(start_date) & dates.lt(end_exclusive)
+    ].copy()
 
 
-# Function to draw a price index chart: one line per supermarket and a grey comparison line
-# (such as the CPI or cao wages), all rescaled to 100 in the base month by chain_price_index()
-# in data_access.py.
-def draw_price_index_chart(
-    price_index,
-    comparison_index,
-    selected_supermarkets,
-    category,
-    comparison_name,
-    comparison_short,
-    comparison_caption,
-):
+#Function to draw a price index chart: one line per supermarket and a grey comparison line
+#(such as the CPI or cao wages), all rescaled to 100 in the base month by chain_price_index()
+#in data_access.py. Supermarkets whose real price data ends early continue as a dashed
+#projection line (from project_price_index() in data_access.py).
+def draw_price_index_chart(price_index, comparison_index, selected_supermarkets, category,
+                           comparison_name, comparison_short, comparison_caption,
+                           projection=None):
     if price_index.empty:
         st.info("No price data is available for this selection.")
         return
@@ -205,6 +204,19 @@ def draw_price_index_chart(
             )
         )
 
+    # Projection after the last month with real price data: a dashed line in the same
+    # colour, starting at the last real point so it connects to the solid line
+    projected = projection if projection is not None else pd.DataFrame()
+    for supermarket_name, data in (projected.groupby("SupermarketName") if not projected.empty else []):
+        fig.add_trace(go.Scatter(
+            x=data["Date"],
+            y=data["Index"],
+            mode="lines",
+            name=f"{supermarket_name} (projection)",
+            line={"color": colours.get(supermarket_name), "width": 2, "dash": "dash"},
+            hovertemplate=f"{supermarket_name} (projection): %{{y:.1f}}<extra></extra>"
+        ))
+
     fig.update_layout(
         title=f"Price index: {category.lower()} compared with {comparison_short} ({base_month:%B %Y} = 100)",
         xaxis_title="Month",
@@ -213,6 +225,16 @@ def draw_price_index_chart(
         hovermode="x unified",
     )
     st.plotly_chart(fig, use_container_width=True)
+
+    projection_caption = ""
+    if not projected.empty:
+        last_real = projected.groupby("SupermarketName")["Date"].min()
+        projection_caption = (
+            " Dashed lines are projections, not data: after its last real price change ("
+            + ", ".join(f"{name} {month:%B %Y}" for name, month in last_real.items())
+            + ") a supermarket's line continues at its average monthly price change over "
+            f"the 12 months before, for at most {db.MAX_PROJECTION_MONTHS} months."
+        )
 
     st.caption(
         "The index shows how much the prices of the same products changed since the "
@@ -223,7 +245,31 @@ def draw_price_index_chart(
         f"{db.MIN_COMPARABLE_PRODUCTS} comparable products. {comparison_caption} "
         "The base month is the first month shown; a supermarket whose data starts later "
         f"starts at the {comparison_short} level of its first month."
+        + projection_caption
     )
+
+# Load annual supermarket market shares from PostgreSQL
+def load_market_shares():
+    conn = psycopg2.connect(
+        host=os.environ["DB_HOST"],
+        dbname=os.environ["DB_NAME"],
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"]
+    )
+
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT year, SUM(marketShare)
+                FROM MarketShares
+                GROUP BY year
+                ORDER BY year
+            """)
+            rows = cursor.fetchall()
+    finally:
+        conn.close()
+
+    return pd.DataFrame(rows, columns=["Year", "MarketShare"])
 
 
 # SIDEBAR
@@ -296,6 +342,9 @@ try:
     if page in ("Overview", "Prices"):
         supermarkets = db.load_supermarkets()
         basket_prices_monthly = db.load_monthly_basket_prices()
+
+    if page == "Overview":
+        market_shares = load_market_shares()
     if page in ("Overview", "Prices", "Economy"):
         economyStatistics = db.load_economy_statistics()
     if page == "Prices":
@@ -341,17 +390,33 @@ if page == "Overview":
             filtered_overview_basket["Date"] == latest_date
         ]
 
+# KPI cards at the top of the page
     col1, col2, col3 = st.columns(3)
 
     with col1:
         st.metric(label="Supermarket chains", value=len(supermarkets))
 
-    # Market shares are only shown once they have been filled in the database
     with col2:
-        if supermarkets["MarketShare"].notna().any():
+        if overview_start is not None and overview_end is not None:
+            filtered_shares = market_shares[
+                (market_shares["Year"] >= overview_start.year) &
+                (market_shares["Year"] <= overview_end.year)
+            ]
+        else:
+            filtered_shares = market_shares.iloc[0:0]
+
+        if not filtered_shares.empty:
+            latest_year = filtered_shares["Year"].max()
+
+            share = filtered_shares.loc[
+                filtered_shares["Year"] == latest_year,
+                "MarketShare"
+            ].iloc[0]
+
             st.metric(
-                label="Combined market share",
-                value=f"{supermarkets['MarketShare'].sum():.0f}%",
+
+                label=f"Combined market share ({latest_year})",
+                value=f"{share:.1f}%"
             )
         else:
             st.metric(label="Combined market share", value="n/a")
@@ -364,6 +429,140 @@ if page == "Overview":
                 label="Average basket price",
                 value=f"€{basket_prices['Price'].mean():.2f}",
             )
+
+# The two charts with data are shown next to each other below the KPI cards
+    chart_col1, chart_col2 = st.columns(2)
+
+    with chart_col1:
+        st.subheader("Market share per supermarket")
+
+    # Market share of each supermarket per year (KPI: supermarket shares within the
+    # Netherlands), from the MarketShares table. Only the years within the Overview page's
+    # date range are shown, in the same way as the combined market share card above.
+        shares_per_supermarket = db.load_market_shares_per_supermarket()
+        if overview_start is not None and overview_end is not None:
+            shares_per_supermarket = shares_per_supermarket[
+                shares_per_supermarket["Year"].between(overview_start.year, overview_end.year)
+            ]
+
+        if shares_per_supermarket.empty:
+            st.info(
+                "No market share data is available for this period. "
+                "Run the market shares importer to load it."
+            )
+        else:
+            share_colours = dict(zip(supermarkets["Name"], px.colors.qualitative.Plotly))
+            share_fig = go.Figure()
+            for supermarket_name, data in shares_per_supermarket.groupby("SupermarketName"):
+                share_fig.add_trace(go.Scatter(
+                    x=data["Year"],
+                    y=data["MarketShare"],
+                    mode="lines+markers",
+                    name=supermarket_name,
+                    line={"color": share_colours.get(supermarket_name), "width": 2},
+                    marker={"size": 8},
+                    hovertemplate=f"{supermarket_name}: %{{y:.1f}}%<extra></extra>"
+                ))
+
+            # Other supermarkets: the rest of the market per year (100% minus the chains above)
+            other_shares = (
+                100 - shares_per_supermarket.groupby("Year")["MarketShare"].sum()
+            ).round(1)
+            share_fig.add_trace(go.Scatter(
+                x=other_shares.index,
+                y=other_shares.values,
+                mode="lines+markers",
+                name="Other supermarkets",
+                line={"color": "#888780", "width": 2, "dash": "dash"},
+                marker={"size": 8},
+                hovertemplate="Other supermarkets: %{y:.1f}%<extra></extra>"
+            ))
+            share_fig.update_layout(
+                title=(
+                    "Market share per supermarket, "
+                    f"{shares_per_supermarket['Year'].min()}–{shares_per_supermarket['Year'].max()}"
+                ),
+                xaxis={"title": "Year", "dtick": 1},
+                yaxis={"title": "Market share (%)", "rangemode": "tozero"},
+                legend_title="Supermarket",
+                hovermode="x unified"
+            )
+            st.plotly_chart(share_fig, use_container_width=True)
+
+            st.caption(
+                "Share of each supermarket chain in Dutch supermarket sales per year (%), from "
+                "the MarketShares table. The four chains together cover the combined market "
+                "share shown above. The grey dashed line, Other supermarkets, is the rest of the "
+                "market: 100% minus the four chains together. Only the years within the selected "
+                "date range are shown."
+            )
+
+    with chart_col2:
+        st.subheader("Food prices compared with household income")
+
+    # Food CPI and average disposable household income on one axis, both 100 in the first
+    # month of the selected date range (the Overview page's date filter). Income is a yearly figure, so it is drawn as one point
+    # per year in the middle of that year (July), connected by straight lines.
+        food_income = filtered_overview_economy.dropna(subset=["FoodCPI"]).sort_values("Date")
+        if food_income.empty:
+            st.info("The food CPI is not in the database yet: run the financial importer.")
+        else:
+            income_base_month = food_income["Date"].iloc[0]
+            food_index = 100 * food_income["FoodCPI"] / food_income["FoodCPI"].iloc[0]
+
+            yearly_income = (
+                filtered_overview_economy.dropna(subset=["AverageDisposableIncome"])
+                .groupby(filtered_overview_economy["Date"].dt.year)["AverageDisposableIncome"].first()
+            )
+            base_year = income_base_month.year
+            income_points = []
+            if base_year in yearly_income.index:
+                base_income = yearly_income[base_year]
+                income_points.append((income_base_month, 100.0))
+                for year, income in yearly_income.items():
+                    mid_year = pd.Timestamp(year=year, month=7, day=1)
+                    if income_base_month < mid_year <= food_income["Date"].iloc[-1]:
+                        income_points.append((mid_year, 100 * income / base_income))
+
+            food_income_fig = go.Figure()
+            food_income_fig.add_trace(go.Scatter(
+                x=food_income["Date"],
+                y=food_index,
+                mode="lines",
+                name="Food prices (CPI food & soft drinks)",
+                line={"color": "#eb6834", "width": 2},
+                hovertemplate="Food prices: %{y:.1f}<extra></extra>"
+            ))
+            if len(income_points) > 1:
+                food_income_fig.add_trace(go.Scatter(
+                    x=[point[0] for point in income_points],
+                    y=[point[1] for point in income_points],
+                    mode="lines+markers",
+                    name="Disposable household income (yearly)",
+                    line={"color": "#2a78d6", "width": 2, "dash": "dash"},
+                    marker={"size": 8},
+                    hovertemplate="Disposable household income: %{y:.1f}<extra></extra>"
+                ))
+            food_income_fig.update_layout(
+                title=f"Food prices compared with disposable household income ({income_base_month:%B %Y} = 100)",
+                xaxis_title="Month",
+                yaxis_title=f"Index ({income_base_month:%b %Y} = 100)",
+                hovermode="x unified"
+            )
+            st.plotly_chart(food_income_fig, use_container_width=True)
+
+            st.caption(
+                "Both lines are 100 in the first month of the selected period. When the income "
+                "line is above the food line, household income grew more than food prices, so "
+                "food takes up a smaller share of the household budget. Food prices are the "
+                "monthly CPI of food and soft drinks (CBS). Disposable income is the average per "
+                "private household, which CBS publishes per year: it is drawn as one point in the "
+                "middle of each year, connected by straight lines, and the values in between are "
+                "an estimate. Because the base month uses the income of its whole year, the first "
+                "step can look larger than the monthly food prices it is compared with."
+            )
+            if len(income_points) <= 1:
+                st.caption("No household income is available for this period yet.")
 
     st.subheader("Basket prices per supermarket")
 
@@ -613,6 +812,10 @@ elif page == "Prices":
             },
         )
 
+    # Supermarkets whose real price data ends earlier are projected up to the last month
+    # with price data of any supermarket within the date range
+    projection_end = filter_by_date(price_index_links, prices_start, prices_end)["Date"].max()
+
     st.subheader("Price index compared with CPI")
 
     # Price index of the same products per supermarket, compared with the CPI, calculated in
@@ -626,10 +829,8 @@ elif page == "Prices":
         economyStatistics[["Date", "CPI"]].rename(columns={"CPI": "Value"}),
     )
     draw_price_index_chart(
-        price_index,
-        cpi_index,
-        selected_supermarkets,
-        category_label,
+        price_index, cpi_index, selected_supermarkets, category_label,
+        projection=db.project_price_index(price_index, projection_end),
         comparison_name="CPI (all items)",
         comparison_short="CPI",
         comparison_caption=(
@@ -649,10 +850,8 @@ elif page == "Prices":
         db.wage_level_from_yearly_increase(economyStatistics),
     )
     draw_price_index_chart(
-        price_index,
-        wage_index,
-        selected_supermarkets,
-        category_label,
+        price_index, wage_index, selected_supermarkets, category_label,
+        projection=db.project_price_index(price_index, projection_end),
         comparison_name="Cao wages (estimate)",
         comparison_short="cao wages",
         comparison_caption=(
@@ -768,6 +967,20 @@ elif page == "Prices":
                 + ". Its bars cannot be compared one-to-one with the other supermarkets."
             )
 
+        # The bars only use real price data, so a supermarket whose last real price change
+        # is before the end of the date range covers a shorter period (no projections)
+        last_real_months = (
+            filtered_index_links[filtered_index_links["IsFood"]]
+            .groupby("SupermarketName")["Date"].max()
+        )
+        early_enders = last_real_months[last_real_months < change_end]
+        if not early_enders.empty:
+            st.caption(
+                "Shorter period, because the real price data ends earlier: "
+                + ", ".join(f"{name} (until {month:%B %Y})" for name, month in early_enders.items())
+                + ". The bars only use real price data, not the projections of the index charts."
+            )
+
         st.plotly_chart(change_fig, use_container_width=True)
 
         st.caption(
@@ -787,6 +1000,50 @@ elif page == "Economy":
     with st.sidebar:
         economy_start, economy_end = render_date_filter([economyStatistics], "economy")
     filtered_economy = filter_by_date(economyStatistics, economy_start, economy_end)
+
+# KPI cards: the change in food prices and in all prices compared with a year earlier,
+# for the last month in the selected date range, with a small trend line of that change
+# over the selected period. The delta is the change compared with the previous month;
+# a rise is shown in red, because rising prices are bad for affordability.
+    def yearly_change_metric(column, label, empty_note):
+        months = filtered_economy.dropna(subset=[column]).sort_values("Date")
+        if months.empty:
+            st.metric(label=label, value="n/a", border=True)
+            st.caption(empty_note)
+            return
+        latest = months.iloc[-1]
+        delta = None
+        if len(months) > 1:
+            previous = months.iloc[-2]
+            delta = f"{latest[column] - previous[column]:+.1f} pt vs {previous['Date']:%B}"
+        st.metric(
+            label=f"{label} ({latest['Date']:%B %Y})",
+            value=f"{latest[column]:+.1f}%",
+            delta=delta,
+            delta_color="inverse",
+            chart_data=months[column].tolist(),
+            chart_type="line",
+            border=True
+        )
+
+    kpi_col1, kpi_col2 = st.columns(2)
+    with kpi_col1:
+        yearly_change_metric(
+            "FoodCPIYearlyRateOfChange",
+            "Food prices vs a year earlier",
+            "The food CPI is not in the database yet: run the financial importer."
+        )
+    with kpi_col2:
+        yearly_change_metric(
+            "CPIYearlyRateOfChange",
+            "All prices (inflation) vs a year earlier",
+            "No CPI data is available for this period."
+        )
+    st.caption(
+        "Food prices: CPI of food and soft drinks (CBS 86141NED); all prices: CPI of all "
+        "goods and services. Both show the official CBS change compared with the same month "
+        "a year earlier; the trend line shows that change over the selected period."
+    )
 
     col1, col2 = st.columns(2)
     with col1:

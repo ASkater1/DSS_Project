@@ -54,8 +54,10 @@ CREATE TABLE EconomyStatistics (
   CPIMonthlyRateOfChange DECIMAL(4,1),
   averageGrossIncome DECIMAL(10,1),         
   averageDisposableIncome DECIMAL(10,1),    
-  averageStandardizedIncome DECIMAL(10,1),  
-  yearlyWageIncrease DECIMAL(4,1)           
+  averageStandardizedIncome DECIMAL(10,1),
+  yearlyWageIncrease DECIMAL(4,1),
+  foodCPI DECIMAL(5,2),
+  foodCPIYearlyRateOfChange DECIMAL(4,1)
 );
 
 CREATE TABLE ProductClusters (
@@ -77,3 +79,11 @@ CREATE TABLE ProductClusterLinks (
 );
 
 CREATE INDEX productClusterLinks_clusterId_idx ON ProductClusterLinks(clusterId);
+
+-- Annual market shares of the four supermarkets (%)
+CREATE TABLE MarketShares (
+    supermarketId INTEGER REFERENCES Supermarkets(supermarketId),
+    year INTEGER NOT NULL,
+    marketShare NUMERIC(4,1) NOT NULL,
+    PRIMARY KEY (supermarketId, year)
+);

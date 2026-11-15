@@ -38,6 +38,9 @@ MIN_COMPARABLE_PRODUCTS = 10
 # Name of the combined food row in the category-change chart
 ALL_FOOD = "All food"
 
+# Maximum length of a projection after a supermarket's last real price change, in months
+MAX_PROJECTION_MONTHS = 6
+
 # Fallback for databases without shared categories (Categories table and
 # Products.categoryId, filled by code/importer/categories/category_importer.py):
 # an SQL expression that turns the raw category path into a top-level category.
@@ -120,9 +123,21 @@ def load_supermarkets() -> pd.DataFrame:
 
 
 # ECONOMY STATISTICS (one row per month, filled by the financial importer)
+# The food CPI columns were added later; on a database where the financial importer has
+# not run since, they are returned as empty instead of causing an error.
 @st.cache_data(ttl=CACHE_TTL)
 def load_economy_statistics() -> pd.DataFrame:
-    economy = run_query("""
+    columns = set(run_query("""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'economystatistics'
+    """)["column_name"])
+    food_cpi = "foodcpi" if "foodcpi" in columns else "NULL::numeric"
+    food_cpi_change = (
+        "foodcpiyearlyrateofchange" if "foodcpiyearlyrateofchange" in columns else "NULL::numeric"
+    )
+
+    economy = run_query(f"""
         SELECT
             date AS "Date",
             cpi AS "CPI",
@@ -131,7 +146,9 @@ def load_economy_statistics() -> pd.DataFrame:
             averagegrossincome AS "AverageGrossIncome",
             averagedisposableincome AS "AverageDisposableIncome",
             averagestandardizedincome AS "AverageStandardizedIncome",
-            yearlywageincrease AS "YearlyWageIncrease"
+            yearlywageincrease AS "YearlyWageIncrease",
+            {food_cpi} AS "FoodCPI",
+            {food_cpi_change} AS "FoodCPIYearlyRateOfChange"
         FROM economystatistics
         ORDER BY date
     """)
@@ -139,6 +156,32 @@ def load_economy_statistics() -> pd.DataFrame:
     return to_numeric(
         economy, [column for column in economy.columns if column != "Date"]
     )
+
+
+# MARKET SHARE PER SUPERMARKET AND YEAR (filled by the market shares importer)
+# Returns an empty table when the MarketShares table does not exist yet.
+@st.cache_data(ttl=CACHE_TTL)
+def load_market_shares_per_supermarket() -> pd.DataFrame:
+    tables = run_query("""
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_name = 'marketshares'
+    """)
+    if tables.empty:
+        return pd.DataFrame(columns=["SupermarketName", "Year", "MarketShare"])
+
+    shares = run_query("""
+        SELECT
+            s.name AS "SupermarketName",
+            m.year AS "Year",
+            m.marketshare AS "MarketShare"
+        FROM marketshares m
+        JOIN supermarkets s ON s.supermarketid = m.supermarketid
+        ORDER BY m.year, s.name
+    """)
+    shares["Year"] = shares["Year"].astype(int)
+    return to_numeric(shares, ["MarketShare"])
+
 
 
 # MUNICIPALITIES (filled by the static municipality importer)
@@ -177,17 +220,21 @@ def load_municipalities() -> pd.DataFrame:
 
 
 # MONTHLY PRICE CHANGE OF THE SAME PRODUCTS, PER SUPERMARKET AND CATEGORY
-# The basis of the price index (see chain_price_index below). For every product:
-#   1. its average price per month,
-#   2. the ratio between that price and its price in its previous month with a price
-#      (this also bridges months without any data, such as Plus in March-April 2024).
+# The basis of the price index (see chain_price_index below).
+# The SupermarketsProducts table only stores the first price of a product and every
+# later price change, not a price for every day. So for every product the query:
+#   1. takes its price at the end of every month in which it has a price record,
+#   2. carries that price forward to the following months, up to the last month in
+#      which its supermarket has any price record (its last real price change), so a
+#      month without a change counts as a 0% change instead of being left out,
+#   3. compares each month's price with the month before.
 # Per supermarket, category and month the query returns the average of the logarithms
 # of those ratios (the logarithm of their geometric mean, the method CBS uses for the
 # CPI), the number of comparable products and how many of them changed price.
 # New products only count from their second month, so they do not cause jumps.
-@st.cache_data(
-    ttl=LONG_CACHE_TTL, show_spinner="Calculating the price index from price records..."
-)
+# After a supermarket's last real price change there are no rows; project_price_index()
+# fills that period with a projection in the charts.
+@st.cache_data(ttl=LONG_CACHE_TTL, show_spinner="Calculating the price index from price records...")
 def load_price_index_links(product_names: tuple[str, ...] = ()) -> pd.DataFrame:
     category, category_join = category_sql()
     is_food = "COALESCE(c.isfood, false)" if category_join else "true"
@@ -213,18 +260,63 @@ def load_price_index_links(product_names: tuple[str, ...] = ()) -> pd.DataFrame:
         individual_product_label=individual_product_label
     )
 
-    links = run_query(
-        f"""
-        WITH product_month AS (
+    links = run_query(f"""
+        WITH observed_month AS (
+            -- The price in effect at the end of every month with a price record
             SELECT
                 supermarketid,
                 productid,
                 date_trunc('month', date)::date AS month,
-                avg(price) AS price
+                (array_agg(price ORDER BY date DESC))[1] AS price
             FROM supermarketsproducts
             WHERE price > 0
               {product_filter}
             GROUP BY supermarketid, productid, date_trunc('month', date)
+        ),
+        supermarket_end AS (
+            -- The last month with a real price change per supermarket (all products)
+            SELECT supermarketid, max(date_trunc('month', date))::date AS last_month
+            FROM supermarketsproducts
+            GROUP BY supermarketid
+        ),
+        product_months AS (
+            -- Every month from a product's first price record up to that last month
+            SELECT o.supermarketid, o.productid, g.month::date AS month
+            FROM (
+                SELECT supermarketid, productid, min(month) AS first_month
+                FROM observed_month
+                GROUP BY supermarketid, productid
+            ) o
+            JOIN supermarket_end se ON se.supermarketid = o.supermarketid
+            CROSS JOIN LATERAL generate_series(
+                o.first_month, se.last_month, interval '1 month'
+            ) AS g(month)
+        ),
+        filled AS (
+            -- Months without a price record get the most recent earlier price
+            SELECT
+                pm.supermarketid,
+                pm.productid,
+                pm.month,
+                om.price,
+                count(om.price) OVER (
+                    PARTITION BY pm.supermarketid, pm.productid ORDER BY pm.month
+                ) AS price_group
+            FROM product_months pm
+            LEFT JOIN observed_month om
+              ON om.supermarketid = pm.supermarketid
+             AND om.productid = pm.productid
+             AND om.month = pm.month
+        ),
+        product_month AS (
+            SELECT
+                supermarketid,
+                productid,
+                month,
+                first_value(price) OVER (
+                    PARTITION BY supermarketid, productid, price_group ORDER BY month
+                ) AS price
+            FROM filled
         ),
         product_link AS (
             SELECT
@@ -366,6 +458,51 @@ def chain_price_index(
         index[columns].sort_values(["SupermarketName", "Date"]).reset_index(drop=True),
         comparison_index,
     )
+
+
+# Function to project the price index of supermarkets whose real price data ends before
+# the end of the chart (end_month). From each supermarket's last month the line continues
+# at its average monthly change over the last 12 months of real data (from the index
+# 12 months earlier, or its first month when it has less history), up to end_month but
+# for at most MAX_PROJECTION_MONTHS months, because a longer projection is too uncertain.
+# The returned rows start with the last real month, so the dashed projection connects to
+# the solid line. Returns a DataFrame with Date, SupermarketName and Index.
+def project_price_index(price_index: pd.DataFrame, end_month: pd.Timestamp | None,
+                        history_months: int = 12) -> pd.DataFrame:
+    columns = ["Date", "SupermarketName", "Index"]
+    if price_index.empty or end_month is None or pd.isna(end_month):
+        return pd.DataFrame(columns=columns)
+
+    projections = []
+    for supermarket, data in price_index.groupby("SupermarketName"):
+        data = data.sort_values("Date")
+        last_month = data["Date"].iloc[-1]
+        if last_month >= end_month or len(data) < 2:
+            continue
+
+        # Average monthly change over the last 12 months of real data
+        history = data[data["Date"] <= last_month - pd.DateOffset(months=history_months)]
+        reference = history.iloc[-1] if not history.empty else data.iloc[0]
+        months_between = (
+            (last_month.year - reference["Date"].year) * 12
+            + last_month.month - reference["Date"].month
+        )
+        if months_between <= 0 or reference["Index"] <= 0:
+            continue
+        monthly_factor = (data["Index"].iloc[-1] / reference["Index"]) ** (1 / months_between)
+
+        projection_end = min(end_month, last_month + pd.DateOffset(months=MAX_PROJECTION_MONTHS))
+        months = pd.date_range(last_month, projection_end, freq="MS")
+        projections.append(pd.DataFrame({
+            "Date": months,
+            "SupermarketName": supermarket,
+            "Index": data["Index"].iloc[-1] * monthly_factor ** np.arange(len(months))
+        }))
+
+    if not projections:
+        return pd.DataFrame(columns=columns)
+    return pd.concat(projections, ignore_index=True)[columns]
+
 
 
 # Function to calculate the price change of the same products per food category and
