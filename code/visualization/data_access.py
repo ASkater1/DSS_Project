@@ -569,24 +569,32 @@ def load_monthly_basket_prices() -> pd.DataFrame:
             SELECT
                 sp.supermarketid,
                 sp.productid,
+                p.basketcode,
                 date_trunc('month', sp.date)::date AS month,
                 avg(sp.price) AS price
             FROM supermarketsproducts sp
             JOIN products p ON p.productid = sp.productid
-            WHERE p.isbasketproduct AND sp.price IS NOT NULL
-            GROUP BY sp.supermarketid, sp.productid, date_trunc('month', sp.date)
+            WHERE p.isbasketproduct AND sp.price IS NOT NULL AND p.basketcode IS NOT NULL
+            GROUP BY sp.supermarketid, sp.productid, p.basketcode, date_trunc('month', sp.date)
         )
         SELECT
-            pm.month AS "Date",
+            pm.month AS "Date", 
             s.name AS "SupermarketName",
-            sum(pm.price) AS "Price",
+            pm.basketcode,
+            avg(pm.price) AS "Price",
             count(*) AS "Products"
         FROM product_month pm
         JOIN supermarkets s ON s.supermarketid = pm.supermarketid
-        GROUP BY pm.month, s.name
-        ORDER BY pm.month, s.name
+        GROUP BY pm.month, s.name, pm.basketcode
+        ORDER BY pm.month, s.name, pm.basketcode
     """)
     basket["Date"] = pd.to_datetime(basket["Date"])
+
+    basket = basket.groupby(["Date", "SupermarketName"], as_index=False).agg(
+        Price=("Price", "sum"),
+        Products=("basketcode", "nunique"),
+    )
+
     return to_numeric(basket, ["Price", "Products"])
 
 

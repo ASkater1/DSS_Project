@@ -725,9 +725,7 @@ elif page == "Prices":
         basket_prices_monthly["SupermarketName"].isin(selected_supermarkets)
     ]
     filtered_basket = filter_by_date(filtered_basket, prices_start, prices_end)
-    basket_totals = filtered_basket[
-        filtered_basket["Date"] == filtered_basket["Date"].max()
-    ].set_index("SupermarketName")["Price"]
+    basket_totals = filtered_basket["Price"]
 
 # Only show the price metrics when data is available
 
