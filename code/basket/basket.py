@@ -149,12 +149,12 @@ if __name__ == "__main__":
             .mappings()
             .all()
         )
-        selected_ids = set()
+        selected_products = {} # create a dictionary for the products that will be in the basket.
 
         for product in products:
             name = product["name"].lower()
 
-            for rule in cpi_basket_rules.values():
+            for code, rule in cpi_basket_rules.items():
 
                 if product["shared_category"] != rule["category"]:
                     continue
@@ -173,19 +173,21 @@ if __name__ == "__main__":
                     if (product["quantity_units"] or "") != rule["unit"]:
                         continue
 
-                selected_ids.add(product["productid"])
+                selected_products[["productid"]] = code
                 break
-        # Reset all booleans for testing.
-        conn.execute(text("UPDATE products SET isbasketproduct = FALSE"))
-
-        conn.execute(
-            text("""
+        
+        
+        for product_id, code in selected_products.items():
+            conn.execute(
+                text("""
                 UPDATE products
-                SET isbasketproduct = TRUE
-                WHERE productid = ANY(:ids)
+                SET isbasketproduct = TRUE,
+                    basketcode = :code
+                WHERE productid = :product_id
             """),
-            {"ids": list(selected_ids)},
-        )
+                {"code": code, "product_id": product_id},
+            )
+
 
     # print(f"Basket products selected: {selected_ids.scalar()}")
-    print(f"Basket products selected: {len(selected_ids)}")
+    print(f"Basket products selected: {len(selected_products)}")
