@@ -141,9 +141,9 @@ if __name__ == "__main__":
         products = (
             conn.execute(
                 text(
-                    """SELECT p.productid, p.name, c.name AS shared_category, p.quantity_value, p.quantity_units
-            FROM products p
-            JOIN categories c ON p.categoryid = c.categoryid"""
+                  """SELECT p.productid, p.name, c.name AS shared_category, p.quantity_value, p.quantity_units
+                  FROM products p
+                  JOIN categories c ON p.categoryid = c.categoryid"""
                 )
             )
             .mappings()
@@ -168,15 +168,21 @@ if __name__ == "__main__":
                 selected_products[product["productid"]] = code
                 break
         
+        # clear the basket to esure the pwogwam has a clean selection everytime.
+        conn.execute(text("""
+            UPDATE products
+            SET isbasketproduct = FALSE,
+                basket_code = NULL
+            """))
         
         for product_id, code in selected_products.items():
             conn.execute(
                 text("""
                 UPDATE products
-                SET isbasketproduct = TRUE,
-                    basketcode = :code
-                WHERE productid = :product_id
-            """),
+                  SET isbasketproduct = TRUE,
+                  basketcode = :code
+                  WHERE productid = :product_id
+                  """),
                 {"code": code, "product_id": product_id},
             )
 
