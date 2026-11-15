@@ -116,7 +116,7 @@ if __name__ == "__main__":
         os.environ["DB_USER"]
         if "DB_USER" in os.environ
         else exit(
-            "DB_USER environment variable not set. Please set it in the .env file."
+            "DB_USER environment variable not set. Pwlease set it in the .env file."
         )
     )
     db_password = (
@@ -149,12 +149,12 @@ if __name__ == "__main__":
             .mappings()
             .all()
         )
-        selected_ids = set()
+        selected_ids = {}
 
         for product in products:
             name = product["name"].lower()
 
-            for rule in cpi_basket_rules.values():
+            for code, rule in cpi_basket_rules.items():
 
                 if product["shared_category"] != rule["category"]:
                     continue
@@ -165,27 +165,34 @@ if __name__ == "__main__":
                 if any(word in name for word in rule["exclude"]):
                     continue
 
-                if rule["quantity"] is not None:
-                    if product["quantity_value"] is None:
-                        continue
-                    if float(product["quantity_value"]) != rule["quantity"]:
-                        continue
-                    if (product["quantity_units"] or "") != rule["unit"]:
-                        continue
+                # if rule["quantity"] is not None:
+                #   if product["quantity_value"] is None:
+                #        continue
+                #    if float(product["quantity_value"]) != rule["quantity"]:
+                #       continue
+                #    if (product["quantity_units"] or "") != rule["unit"]:
+                #        continue
 
-                selected_ids.add(product["productid"])
+                selected_ids[product["productid"]] = code
                 break
         # Reset all booleans for testing.
-        conn.execute(text("UPDATE products SET isbasketproduct = FALSE"))
+        # conn.execute(text("UPDATE products SET isbasketproduct = FALSE"))
+        conn.execute(text("""
+          UPDATE products
+          SET isbasketproduct = FALSE,
+              basketcode = NULL
+          """))
 
-        conn.execute(
-            text("""
+        for product_id, code in selected_ids.items():
+            conn.execute(
+                text("""
                 UPDATE products
-                SET isbasketproduct = TRUE
-                WHERE productid = ANY(:ids)
+                SET isbasketproduct = TRUE,
+                    basketcode = :code
+                WHERE productid = :product_id
             """),
-            {"ids": list(selected_ids)},
-        )
+                {"code": code, "product_id": product_id},
+            )
 
     # print(f"Basket products selected: {selected_ids.scalar()}")
     print(f"Basket products selected: {len(selected_ids)}")

@@ -15,17 +15,18 @@ CREATE TABLE Categories (
   description TEXT
 );
 
-CREATE TABLE Products (
-  productId TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  isBasketProduct BOOLEAN,
-  brand TEXT NOT NULL,
-  category TEXT NOT NULL,
-  categoryId INTEGER REFERENCES Categories(categoryId),
-  description TEXT,
-  quantity_value NUMERIC,
-  quantity_units TEXT
-);
+  CREATE TABLE Products (
+    productId TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    isBasketProduct BOOLEAN,
+    brand TEXT NOT NULL,
+    category TEXT NOT NULL,
+    categoryId INTEGER REFERENCES Categories(categoryId),
+    description TEXT,
+    quantity_value NUMERIC,
+    quantity_units TEXT,
+    basketcode TEXT
+  );
 
 CREATE TABLE SupermarketsProducts (
   supermarketId INTEGER REFERENCES Supermarkets(supermarketId),
