@@ -11,6 +11,8 @@
 #                                                                standardized income (yearly, repeated
 #                                                                on every month of that year)
 #   85663NED  Cao-lonen, contractuele loonkosten en arbeidsduur -> yearlyWageIncrease (monthly)
+#   86141NED  Consumentenprijzen; CPI 2025=100, index en mutaties -> foodCPI,
+#             foodCPIYearlyRateOfChange (monthly, category food and soft drinks)
 
 
 # Importing necessary libraries
@@ -37,6 +39,10 @@ CBS_BASE_URL = "https://opendata.cbs.nl/ODataApi/OData"
 CPI_TABLE = "83136NED"
 INCOME_TABLE = "83932NED"
 WAGE_TABLE = "85663NED"
+FOOD_CPI_TABLE = "86141NED"
+
+# Spending category of the food CPI in 86141NED (food and soft drinks)
+FOOD_CPI_CATEGORY = "010000 Voeding en alcoholvrije dranken"
 
 # First month to import, as YYYY-MM (can be overridden with ECONOMY_IMPORTER_START_MONTH).
 # November 2022 is the first month of the supermarket price data.
@@ -68,7 +74,9 @@ final_columns = [
     "averagegrossincome",
     "averagedisposableincome",
     "averagestandardizedincome",
-    "yearlywageincrease"
+    "yearlywageincrease",
+    "foodcpi",
+    "foodcpiyearlyrateofchange"
 ]
 
 # Largest absolute value each DECIMAL column can hold, used to fail early with a clear error
@@ -79,7 +87,16 @@ column_limits = {
     "averagegrossincome": 999999999.9,   # DECIMAL(10,1)
     "averagedisposableincome": 999999999.9,
     "averagestandardizedincome": 999999999.9,
-    "yearlywageincrease": 999.9          # DECIMAL(4,1)
+    "yearlywageincrease": 999.9,         # DECIMAL(4,1)
+    "foodcpi": 999.99,                   # DECIMAL(5,2)
+    "foodcpiyearlyrateofchange": 999.9   # DECIMAL(4,1)
+}
+
+# Columns that were added to EconomyStatistics later. initdb.sql only runs when a new
+# database is created, so the importer adds them to an existing database when missing.
+ADDED_COLUMNS = {
+    "foodcpi": "DECIMAL(5,2)",
+    "foodcpiyearlyrateofchange": "DECIMAL(4,1)"
 }
 
 
@@ -300,6 +317,32 @@ def load_wage_increase(start_year: int) -> pd.DataFrame:
 
 
 
+# Function to download the monthly CPI of food and soft drinks and its official change
+# compared with the same month a year earlier (CBS publishes this table with 2025 = 100)
+def load_food_cpi(start_year: int) -> pd.DataFrame:
+    properties = get_cbs_data(FOOD_CPI_TABLE, "DataProperties")
+    cpi_key = get_topic_key(properties, "CPI")
+    yearly_change_key = get_topic_key(properties, "Jaarmutatie CPI")
+
+    filters = [
+        MONTHLY_PERIOD_FILTER,
+        f"Perioden ge '{start_year}'",
+        "Bestedingscategorieen eq "
+        f"'{get_category_key(FOOD_CPI_TABLE, 'Bestedingscategorieen', FOOD_CPI_CATEGORY)}'"
+    ]
+    data = get_cbs_data(
+        FOOD_CPI_TABLE,
+        "TypedDataSet",
+        params={"$filter": " and ".join(filters), "$select": f"Perioden,{cpi_key},{yearly_change_key}"}
+    )
+
+    data["month"] = period_to_month(data["Perioden"])
+    data["foodcpi"] = pd.to_numeric(data[cpi_key], errors="coerce").round(2)
+    data["foodcpiyearlyrateofchange"] = pd.to_numeric(data[yearly_change_key], errors="coerce").round(1)
+    return data.set_index("month")[["foodcpi", "foodcpiyearlyrateofchange"]]
+
+
+
 # Function to determine the latest month to import from today's date. CBS publishes
 # a month's figures in the following month, so the current month is never complete.
 def get_latest_month(today: date | None = None) -> pd.Period:
@@ -320,6 +363,7 @@ def load_economy_statistics(start_month: pd.Period | None = None,
     monthly = (
         load_cpi(start_year)
         .join(load_wage_increase(start_year), how="outer")
+        .join(load_food_cpi(start_year), how="outer")
         .sort_index()
     )
 
@@ -463,6 +507,13 @@ if __name__ == "__main__":
     db_conn = create_engine(
         f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
     )
+
+    # Add columns that were added to the table later, when the database is older
+    with db_conn.begin() as conn:
+        for column, column_type in ADDED_COLUMNS.items():
+            conn.execute(text(
+                f"ALTER TABLE economystatistics ADD COLUMN IF NOT EXISTS {column} {column_type}"
+            ))
 
     # Compare the latest CBS data with what is stored and keep only outdated months
     stored = load_stored_statistics(db_conn, start_month)
