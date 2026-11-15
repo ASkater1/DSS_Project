@@ -14,14 +14,8 @@ import data_access as db
 st.set_page_config(layout="wide")
 
 
-#Function to render a date range filter for each of the dashboard pages
-#It shows a two-way slider (start date on the left, end date on the right) and, below it,
-#a start and an end date field that always show the selected dates and can also be typed in.
-#The slider and the date fields are kept in sync. By default the whole period of the data is
-#selected. It returns the selected start and end dates as timestamps, or None if there is no
-#date available in the selection.
+#Function to render a date range filter for each of the dashboard pages as 2 way slider
 def render_date_filter(dataframes, key):
-    """Render a date range slider with start and end date fields and return the selected pandas timestamps."""
     date_values = [
         pd.to_datetime(dataframe["Date"], errors="coerce")
         for dataframe in dataframes
@@ -57,7 +51,7 @@ def render_date_filter(dataframes, key):
         st.session_state[start_key] = start
         st.session_state[end_key] = end
 
-    # Typing a date moves the slider (only when the start is on or before the end)
+    # Typing a date moves the slider, only when the start date is on or before the end date
     def date_fields_changed():
         start = st.session_state[start_key] or minimum_date
         end = st.session_state[end_key] or maximum_date
@@ -112,11 +106,7 @@ def filter_by_date(dataframe, start_date, end_date):
     ].copy()
 
 
-#Function to draw a price index chart: one line per supermarket and a grey comparison line
-#(such as the CPI or cao wages), all rescaled to 100 in the base month by chain_price_index()
-#in data_access.py. Supermarkets whose real price data ends early continue as a dashed
-#projection line (from project_price_index() in data_access.py), and the comparison line
-#can get a dashed projection too (from project_comparison()).
+#Price index chart. 
 def draw_price_index_chart(price_index, comparison_index, selected_supermarkets, category,
                            comparison_name, comparison_short, comparison_caption,
                            projection=None, comparison_projection=None):
@@ -193,8 +183,7 @@ def draw_price_index_chart(price_index, comparison_index, selected_supermarkets,
             )
         ))
 
-    # Projection after the last month with real price data: a dashed line in the same
-    # colour, starting at the last real point so it connects to the solid line
+    # Projection after the last month with real price data
     projected = projection if projection is not None else pd.DataFrame()
     for supermarket_name, data in (projected.groupby("SupermarketName") if not projected.empty else []):
         fig.add_trace(go.Scatter(
@@ -259,9 +248,7 @@ def load_market_shares():
 
 
 # SIDEBAR
-# The dashboard has four pages, chosen with four tiles in the sidebar. Below the tiles
-# the sidebar shows the filters of the selected page (added by each page further down).
-# Each page focuses on a different part of supermarket affordability or accessibility.
+
 PAGES = {
     "Overview": ":material/dashboard:",
     "Prices": ":material/sell:",
@@ -269,8 +256,7 @@ PAGES = {
     "Municipalities": ":material/map:",
 }
 
-# Hide the arrow that collapses the sidebar, so the sidebar always stays open,
-# and make the page buttons in the sidebar look like tiles
+# Hide the arrow that collapses the sidebar
 st.markdown(
     """
     <style>
@@ -286,13 +272,12 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# The selected page is remembered between reruns; the dashboard opens on Overview
+# The selected page is remembered between reruns, overview is default
 if "page" not in st.session_state:
     st.session_state.page = "Overview"
 
 
-# Function that runs when a tile is clicked: it selects that page before the rerun,
-# so the right tile is highlighted straight away
+# Function that runs when a tile is clicked
 def select_page(name):
     st.session_state.page = name
 
@@ -320,8 +305,7 @@ with st.sidebar:
 
 page = st.session_state.page
 
-# Functions to fetch the data from the database. Only the data the selected page needs
-# is loaded, so pages without the slow price index open immediately.
+# Functions to fetch the data from the database.
 try:
     if page in ("Overview", "Prices"):
         supermarkets = db.load_supermarkets()
@@ -349,7 +333,6 @@ if page == "Municipalities" and municipalities.empty:
     st.stop()
 
 # OVERVIEW PAGE
-# Shows general supermarket information, market shares and essential basket prices
 
 if page == "Overview":
 
@@ -417,15 +400,12 @@ if page == "Overview":
                 value=f"€{basket_prices['Price'].mean():.2f}"
             )
 
-# The two charts with data are shown next to each other below the KPI cards
     chart_col1, chart_col2 = st.columns(2)
 
     with chart_col1:
         st.subheader("Market share per supermarket")
 
-    # Market share of each supermarket per year (KPI: supermarket shares within the
-    # Netherlands), from the MarketShares table. Only the years within the Overview page's
-    # date range are shown, in the same way as the combined market share card above.
+    # Market share of each supermarket per year
         shares_per_supermarket = db.load_market_shares_per_supermarket()
         if overview_start is not None and overview_end is not None:
             shares_per_supermarket = shares_per_supermarket[
@@ -484,9 +464,7 @@ if page == "Overview":
     with chart_col2:
         st.subheader("Food prices compared with household income")
 
-    # Food CPI and average disposable household income on one axis, both 100 in the first
-    # month of the selected date range (the Overview page's date filter). Income is a yearly figure, so it is drawn as one point
-    # per year in the middle of that year (July), connected by straight lines.
+    # Food CPI and average disposable household income on one axis, standardized to first value
         food_income = filtered_overview_economy.dropna(subset=["FoodCPI"]).sort_values("Date")
         if food_income.empty:
             st.info("The food CPI is not in the database yet: run the financial importer.")
@@ -548,11 +526,7 @@ if page == "Overview":
 
     st.subheader("Basket price as a share of household income")
 
-# Affordability of the essential basket: the basket price of each supermarket as a percentage
-# of the average disposable household income per month, so both are on one axis.
-# CBS publishes income per year, so the yearly income divided by 12 is placed in the middle
-# of each year (July) and the months in between are interpolated in a straight line. Months
-# before the first or after the last published year keep the nearest yearly value.
+# Affordability of the essential basket, supermarket basket price / monthly income in %
     yearly_income = (
         economyStatistics.dropna(subset=["AverageDisposableIncome"])
         .groupby(economyStatistics["Date"].dt.year)["AverageDisposableIncome"].first()
@@ -629,9 +603,7 @@ elif page == "Prices":
             default=supermarkets["Name"].tolist()
         )
 
-# Products are grouped into shared categories (see code/importer/categories), so the
-# same category can be compared between supermarkets. The list only contains the
-# categories of the selected supermarkets. An empty selection includes every category.
+#Category filter
     available_index_links = price_index_links[
         price_index_links["SupermarketName"].isin(selected_supermarkets)
     ]
@@ -665,8 +637,7 @@ elif page == "Prices":
             key="price_products"
         )
 
-# Recalculate only the CPI and wage index dataset from the active product and
-# category filters. Other visuals retain their original scope.
+# Recalculate only the CPI and wage index dataset from the active product and category filters.
     if selected_products:
         visual_index_links = db.load_price_index_links(tuple(selected_products))
     else:
@@ -775,10 +746,7 @@ elif page == "Prices":
 
     st.subheader("Price index compared with CPI")
 
-# Price index of the same products per supermarket, compared with the CPI, calculated in
-# data_access.py. Unlike an average price, it does not jump when products are added.
-# The first month shown is the base month (100); a supermarket whose data starts later
-# starts at the CPI level of its first month.
+# Price index of the same products per supermarket compared with CPI
     cpi_data = economyStatistics[["Date", "CPI"]].rename(columns={"CPI": "Value"})
     price_index, cpi_index = db.chain_price_index(
         filtered_index_links, tuple(selected_categories), selected_supermarkets,
@@ -786,7 +754,7 @@ elif page == "Prices":
     )
 
     # The CPI is only predicted after its last published month, not when the date range
-    # ends earlier (then the real CPI of the next months is already known)
+    # ends earlier
     cpi_projection = None
     if not cpi_index.empty and cpi_index["Date"].max() == cpi_data.dropna()["Date"].max():
         cpi_projection = db.project_comparison(cpi_index)
@@ -804,8 +772,7 @@ elif page == "Prices":
 
     st.subheader("Price index compared with cao wages")
 
-# The same price index, compared with collective (cao) wages. The wage line is built from
-# the stored yearly cao wage increase (YearlyWageIncrease), see data_access.py.
+# The same price index, compared with collective (cao) wages.
     price_index, wage_index = db.chain_price_index(
         filtered_index_links, tuple(selected_categories), selected_supermarkets,
         db.wage_level_from_yearly_increase(economyStatistics), end_month=prices_end
@@ -824,9 +791,7 @@ elif page == "Prices":
     st.subheader("Price change per category")
 
 # Percentage price change of the same products per food category and supermarket over
-# one common period (KPI: % price change per category of products), calculated in
-# data_access.py. The calculation follows the active date, supermarket, category and
-# product filters.
+# one common period (KPI: % price change per category of products)
     category_changes, change_start, change_end = db.category_price_changes(
         filtered_index_links,
         selected_supermarkets,
@@ -836,8 +801,7 @@ elif page == "Prices":
     if category_changes.empty:
         st.info("Not enough price data is available for this selection.")
     else:
-        # Categories from the largest to the smallest average change, with their
-        # combined result on top.
+        # Categories from the largest to the smallest average change
         order = (
             category_changes[category_changes["Category"] != db.ALL_FOOD]
             .groupby("Category")["Change"].mean()
@@ -903,7 +867,6 @@ elif page == "Prices":
         )
 
 # ECONOMY PAGE
-# Shows the monthly CPI, inflation and household income from the economy statistics
 
 elif page == "Economy":
     st.header("Citizen Economy")
@@ -915,10 +878,8 @@ elif page == "Economy":
         economyStatistics, economy_start, economy_end
     )
 
-# KPI cards: the change in food prices and in all prices compared with a year earlier,
-# for the last month in the selected date range, with a small trend line of that change
-# over the selected period. The delta is the change compared with the previous month;
-# a rise is shown in red, because rising prices are bad for affordability.
+# KPI cards: Change in food prices and change in CPI compared with a year earlier
+
     def yearly_change_metric(column, label, empty_note):
         months = filtered_economy.dropna(subset=[column]).sort_values("Date")
         if months.empty:
@@ -989,8 +950,6 @@ elif page == "Economy":
         st.plotly_chart(CPI_Monthly_Rate, use_container_width=True)
 
 # MUNICIPALITIES PAGE
-# Shows supermarket accessibility in different Dutch municipalities
-
 elif page == "Municipalities":
 
     st.header("Supermarket Accessibility")
@@ -1038,8 +997,6 @@ elif page == "Municipalities":
         )
 
 # Retrieve municipality boundaries from PDOK
-# The map uses our calculated accessibility score per 10,000 residents
-# Green indicates higher scores and red indicates lower scores
     st.subheader("Supermarket Accessibility by Municipality")
 
     geojson_url = (
@@ -1107,7 +1064,6 @@ elif page == "Municipalities":
 
 
 # Compare municipality population with supermarket accessibility
-# This helps identify municipalities with relatively low accessibility scores
     st.subheader("Municipality Comparison")
 
     fig = px.scatter(
@@ -1125,7 +1081,6 @@ elif page == "Municipalities":
     st.plotly_chart(fig, use_container_width=True)
 
 # Display the municipality data and calculated accessibility scores in a table
-# Users can inspect the values behind the map and scatter plot
     st.subheader("Municipality Data")
 
     st.dataframe(

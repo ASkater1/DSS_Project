@@ -42,15 +42,7 @@ ALL_FOOD = "All food"
 MAX_PROJECTION_MONTHS = 6
 
 # Fallback for databases without shared categories (Categories table and
-# Products.categoryId, filled by code/importer/categories/category_importer.py):
-# an SQL expression that turns the raw category path into a top-level category.
-# These are not comparable between supermarkets. Every supermarket stores its
-# category path in a different format:
-#   AH     Home\Producten\Zuivel, eieren\Yoghurt en skyr\...  -> "Zuivel, eieren"
-#   Plus   Zuivel eieren boter\Verse zuivel\Yoghurt           -> "Zuivel eieren boter"
-#   Jumbo  Koek, snoep, chocolade en chips ; Chocolade ; ...  -> "Koek, snoep, chocolade en chips"
-#   Lidl   Home/Eten & drinken/Kaas & Zuivel &&& ...           -> "Kaas & Zuivel"
-# Paths that match none of these (mostly Lidl's Open Food Facts labels) become "Overig".
+# Products.categoryId, filled by code/importer/categories/category_importer.py)
 TOP_CATEGORY_SQL = r"""
     CASE
         WHEN p.category IS NULL OR p.category = '' THEN 'Overig'
@@ -163,7 +155,6 @@ def load_economy_statistics() -> pd.DataFrame:
 
 
 # MARKET SHARE PER SUPERMARKET AND YEAR (filled by the market shares importer)
-# Returns an empty table when the MarketShares table does not exist yet.
 @st.cache_data(ttl=CACHE_TTL)
 def load_market_shares_per_supermarket() -> pd.DataFrame:
     tables = run_query("""
@@ -225,14 +216,12 @@ def load_municipalities() -> pd.DataFrame:
 # The basis of the price index (see chain_price_index below).
 # The SupermarketsProducts table only stores the first price of a product and every
 # later price change, not a price for every day. So for every product the query:
-#   1. takes its price at the end of every month in which it has a price record,
-#   2. carries that price forward to the following months, up to the last month in
-#      which its supermarket has any price record (its last real price change), so a
-#      month without a change counts as a 0% change instead of being left out,
-#   3. compares each month's price with the month before.
+#   1. takes its price at the end of every month in which it has a price record
+#   2. carries that price forward to the following months until the next price change
+#   3. compares each month's price with the month before
 # Per supermarket, category and month the query returns the average of the logarithms
 # of those ratios (the logarithm of their geometric mean, the method CBS uses for the
-# CPI), the number of comparable products and how many of them changed price.
+# CPI)
 # New products only count from their second month, so they do not cause jumps.
 # After a supermarket's last real price change there are no rows; project_price_index()
 # fills that period with a projection in the charts.
@@ -359,15 +348,6 @@ def load_price_index_links(product_names: tuple[str, ...] = ()) -> pd.DataFrame:
 # and supermarkets. An empty category selection includes every category.
 # The comparison series is a DataFrame with the columns Date and Value (any level, for
 # example the CPI with 2015 = 100).
-# The base month is the first month shown: the earliest month in the given links (so the
-# date filter decides it). In the base month the comparison series and every supermarket
-# with data are 100; from there the monthly changes are multiplied. A supermarket whose
-# data starts later (such as Lidl) starts at the comparison level of its first month and
-# follows its own price changes from there. A month without price changes keeps the index
-# at the level of the month before. Months without any data for a supermarket stay empty
-# (the chart connects the line).
-# The comparison series runs up to end_month when it is given (otherwise up to the last
-# month with price data).
 # Returns the price index and the comparison series rescaled to 100 in the base month.
 def chain_price_index(links: pd.DataFrame, categories: tuple[str, ...], supermarkets: list[str],
                       comparison: pd.DataFrame,

@@ -1,4 +1,0 @@
-#Required dependencies to execute the moddeling 
-pandas
-SQLAlchemy
-python-dotenv
