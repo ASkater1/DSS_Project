@@ -551,36 +551,6 @@ if page == "Overview":
             if len(income_points) <= 1:
                 st.caption("No household income is available for this period yet.")
 
-    st.subheader("Basket prices per supermarket")
-
-    if basket_prices.empty:
-        st.info(
-            "No essential basket has been defined yet: no product has "
-            "isBasketProduct set in the database."
-        )
-    else:
-        fig = px.bar(
-            basket_prices,
-            x="SupermarketName",
-            y="Price",
-            color="SupermarketName",
-            hover_name="SupermarketName",
-            hover_data=["Products"],
-            labels={
-                "Price": "Basket price (€)",
-                "SupermarketName": "Supermarket",
-                "Products": "Basket products"
-            },
-            title=f"Basket price per supermarket ({latest_date:%B %Y})"
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.write(
-            "This chart shows the price of the essential basket in each supermarket, "
-            "based on the average price of each basket product in the latest month."
-        )
-
     st.subheader("Average basket price per supermarket compared to increase of income")
 
     if filtered_overview_basket.empty or filtered_overview_economy.empty:
