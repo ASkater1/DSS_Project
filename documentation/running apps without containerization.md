@@ -1,5 +1,5 @@
 # How to run apps without the containerization part
-1. make shure the database is running with `docker compose up -d database` from the project root
+1. make shure the database is running with `docker compose up -d database` from the project root, and that the docker-compose.yml exposes the database (might need to comment block in!)
 
 2. create a virtual environment to install the dependencys into (Execute inside the actual code folder!) via `python -m venv ./.venv/`
 
