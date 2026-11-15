@@ -5,9 +5,9 @@ code,name,category,include,exclude,quantity,unit
 011140,Ontbijtgranen,"Ontbijt, beleg & bakproducten",havermout|muesli|cornflakes,reep|koek|drink,500,g
 011150,Pasta en noedels,"Pasta, rijst & wereldkeuken",spaghetti|macaroni|penne|fusilli|couscous,saus|maaltijd|kant-en-klaar|kant & klaar|salade,500,g
 011190,Overige graanproducten,"Chips, noten & borrelsnacks",popcorn,kip|karamel|chocolade,100,g
-011221,Rundvlees,Vlees & kip,rundergehakt|runderlap|biefstuk,burger|gehaktbal|gemarineerd|bereid|saus,300,g
-011222,Varkensvlees,Vlees & kip,varkenshaas|speklap|karbonade,gemarineerd|gepaneerd|schnitzel,300,g
-011224,Pluimveevlees,Vlees & kip,kipfilet|kipdijfilet,beleg|gerookt|gepaneerd|schnitzel|salade|maaltijd,300,g
+011221,Rundvlees,Vlees & kip,rundergehakt|runderlap|biefstuk,burger|gehaktbal|gemarineerd|bereid|saus,500,g
+011222,Varkensvlees,Vlees & kip,varkenshaas|speklap|karbonade,gemarineerd|gepaneerd|schnitzel,500,g
+011224,Pluimveevlees,Vlees & kip,kipfilet|kipdijfilet,beleg|gerookt|gepaneerd|schnitzel|salade|maaltijd,500,g
 011230,Gezouten en gerookt vlees,Vleeswaren,achterham|salami,pizza|salade|sandwich,100,g
 011250,Vleesbereidingen,Vlees & kip,hamburger|braadworst,vegetarisch|vegan|plantaardig,250,g
 011310,Verse en diepgevroren vis,Vis,zalmfilet|kabeljauwfilet,gerookt|gepaneerd|saus|salade,200,g
@@ -41,14 +41,14 @@ code,name,category,include,exclude,quantity,unit
 011840,Notenpasta,"Ontbijt, beleg & bakproducten",pindakaas,reep|koek|ijs|chocolade,350,g
 011850,Chocolade,"Koek, snoep & chocolade",melkchocolade|pure chocolade,koek|saus|ijs|drank|hagelslag,100,g
 011860,IJs,Diepvries & ijs,vanille ijs|vanille-ijs|roomijs,taart|cake|saus,1000,ml
-011890,Snoep,"Koek, snoep & chocolade",winegums|drop|snoep,ijs|koek|chocolade|saus,200,g
+011890,Snoep,"Koek, snoep & chocolade",winegums|drop|snoep,ijs|koek|chocolade|saus,500,g
 011910,Kant-en-klare maaltijden,Maaltijden & salades,lasagne|pizza margherita|macaroni maaltijd,saus|mix|kruiden|bodem,400,g
 011920,Babyvoeding,Babyvoeding,opvolgmelk|zuigelingenvoeding|babyhapje,fles|speen|luier,200,g
 011930,Sauzen en zout,"Soepen, sauzen, kruiden & conserven",tomatenketchup|mayonaise|keukenzout,chips|salade|maaltijd,500,ml
-011940,Kruiden en specerijen,"Soepen, sauzen, kruiden & conserven",zwarte peper|paprikapoeder|kaneel,chips|saus|mix|thee,40,g
+011940,Kruiden en specerijen,"Soepen, sauzen, kruiden & conserven",zwarte peper|paprikapoeder|kaneel,chips|saus|mix|thee,20,g
 012100,Fruit- en groentesappen,"Frisdrank, sappen & water",appelsap|sinaasappelsap,frisdrank|limonade|nectar|siroop,1000,ml
 012200,Koffie,Koffie & thee,filterkoffie|gemalen koffie|koffiebonen,melk|drank|ijs|chocolade,500,g
 012300,Thee,Koffie & thee,zwarte thee|groene thee|rooibos,ijsthee|frisdrank|drank,20,st
-012500,Water,"Frisdrank, sappen & water",mineraalwater|bronwater,smaak|citroen|fruit|limonade,1500,ml
-012600,Frisdrank,"Frisdrank, sappen & water",cola|sinas,snoep|ijs|saus|zero sugar syrup,1500,ml
-012900,Overige alcoholvrije dranken,"Frisdrank, sappen & water",energy drink|energiedrank,poeder|reep|snoep,250,ml
+012500,Water,"Frisdrank, sappen & water",mineraalwater|bronwater,smaak|citroen|fruit|limonade,1000,ml
+012600,Frisdrank,"Frisdrank, sappen & water",cola|sinas,snoep|ijs|saus|zero sugar syrup,1000,ml
+012900,Overige alcoholvrije dranken,"Frisdrank, sappen & water",energy drink|energiedrank,poeder|reep|snoep,500,ml

@@ -165,15 +165,7 @@ if __name__ == "__main__":
                 if any(word in name for word in rule["exclude"]):
                     continue
 
-                if rule["quantity"] is not None:
-                    if product["quantity_value"] is None:
-                        continue
-                    if float(product["quantity_value"]) != rule["quantity"]:
-                        continue
-                    if (product["quantity_units"] or "") != rule["unit"]:
-                        continue
-
-                selected_products[["productid"]] = code
+                selected_products[product["productid"]] = code
                 break
         
         

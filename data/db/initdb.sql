@@ -24,7 +24,8 @@ CREATE TABLE Products (
   categoryId INTEGER REFERENCES Categories(categoryId),
   description TEXT,
   quantity_value NUMERIC,
-  quantity_units TEXT
+  quantity_units TEXT,
+  basketcode TEXT
 );
 
 CREATE TABLE SupermarketsProducts (
