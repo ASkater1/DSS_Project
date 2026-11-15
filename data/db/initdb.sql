@@ -53,8 +53,10 @@ CREATE TABLE EconomyStatistics (
   CPIMonthlyRateOfChange DECIMAL(4,1),
   averageGrossIncome DECIMAL(10,1),         
   averageDisposableIncome DECIMAL(10,1),    
-  averageStandardizedIncome DECIMAL(10,1),  
-  yearlyWageIncrease DECIMAL(4,1)           
+  averageStandardizedIncome DECIMAL(10,1),
+  yearlyWageIncrease DECIMAL(4,1),
+  foodCPI DECIMAL(5,2),
+  foodCPIYearlyRateOfChange DECIMAL(4,1)
 );
 
 CREATE TABLE ProductClusters (

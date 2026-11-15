@@ -128,9 +128,21 @@ def load_supermarkets() -> pd.DataFrame:
 
 
 # ECONOMY STATISTICS (one row per month, filled by the financial importer)
+# The food CPI columns were added later; on a database where the financial importer has
+# not run since, they are returned as empty instead of causing an error.
 @st.cache_data(ttl=CACHE_TTL)
 def load_economy_statistics() -> pd.DataFrame:
-    economy = run_query("""
+    columns = set(run_query("""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'economystatistics'
+    """)["column_name"])
+    food_cpi = "foodcpi" if "foodcpi" in columns else "NULL::numeric"
+    food_cpi_change = (
+        "foodcpiyearlyrateofchange" if "foodcpiyearlyrateofchange" in columns else "NULL::numeric"
+    )
+
+    economy = run_query(f"""
         SELECT
             date AS "Date",
             cpi AS "CPI",
@@ -139,12 +151,40 @@ def load_economy_statistics() -> pd.DataFrame:
             averagegrossincome AS "AverageGrossIncome",
             averagedisposableincome AS "AverageDisposableIncome",
             averagestandardizedincome AS "AverageStandardizedIncome",
-            yearlywageincrease AS "YearlyWageIncrease"
+            yearlywageincrease AS "YearlyWageIncrease",
+            {food_cpi} AS "FoodCPI",
+            {food_cpi_change} AS "FoodCPIYearlyRateOfChange"
         FROM economystatistics
         ORDER BY date
     """)
     economy["Date"] = pd.to_datetime(economy["Date"])
     return to_numeric(economy, [column for column in economy.columns if column != "Date"])
+
+
+
+# MARKET SHARE PER SUPERMARKET AND YEAR (filled by the market shares importer)
+# Returns an empty table when the MarketShares table does not exist yet.
+@st.cache_data(ttl=CACHE_TTL)
+def load_market_shares_per_supermarket() -> pd.DataFrame:
+    tables = run_query("""
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_name = 'marketshares'
+    """)
+    if tables.empty:
+        return pd.DataFrame(columns=["SupermarketName", "Year", "MarketShare"])
+
+    shares = run_query("""
+        SELECT
+            s.name AS "SupermarketName",
+            m.year AS "Year",
+            m.marketshare AS "MarketShare"
+        FROM marketshares m
+        JOIN supermarkets s ON s.supermarketid = m.supermarketid
+        ORDER BY m.year, s.name
+    """)
+    shares["Year"] = shares["Year"].astype(int)
+    return to_numeric(shares, ["MarketShare"])
 
 
 

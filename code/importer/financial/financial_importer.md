@@ -9,6 +9,7 @@ The importer combines three CBS datasets:
 * `83136NED`, *Consumentenprijzen; basisjaren vanaf 1969*: the monthly consumer price index (CPI) and its rate of change compared with the same month a year earlier.
 * `83932NED`, *Inkomen van huishoudens; inkomensklassen, huishoudenskenmerken*: the average gross, disposable and standardized income of all private households.
 * `85663NED`, *Cao-lonen, contractuele loonkosten en arbeidsduur*: the monthly increase of collective (cao) wages compared with a year earlier. Neither of the other two tables contains wages, so this table supplies `yearlyWageIncrease`.
+* `86141NED`, *Consumentenprijzen; CPI 2025=100, index en mutaties*: the monthly CPI of the spending category *Voeding en alcoholvrije dranken* (food and soft drinks) and its official change compared with the same month a year earlier. This table supplies `foodCPI` and `foodCPIYearlyRateOfChange`.
 
 CPI and wages use monthly periods (CBS keys such as `2024MM03`). CBS publishes household income only per year (`2024JJ00`), so every month gets the income of its own year. Months in a year CBS has not published income for yet store `NULL` in the income columns.
 
@@ -24,8 +25,12 @@ CPI and wages use monthly periods (CBS keys such as `2024MM03`). CBS publishes h
 | `averageDisposableIncome` | 83932NED | Average disposable income (*besteedbaar inkomen*) per private household for that month's year, in euros. |
 | `averageStandardizedIncome` | 83932NED | Average standardized income (*gestandaardiseerd inkomen*) for that month's year, in euros. It corrects for household size and composition. |
 | `yearlyWageIncrease` | 85663NED | Percentage change of collective wages per month, including special payments, compared with the same month a year earlier. It covers all cao sectors and all economic activities, and uses the current (not first-published) figures. |
+| `foodCPI` | 86141NED | Monthly CPI of food and soft drinks, with **2025 = 100** as CBS publishes it (the `CPI` column uses 2015 = 100; the dashboard rescales both to the same base month). |
+| `foodCPIYearlyRateOfChange` | 86141NED | Percentage change of the food CPI compared with the same month a year earlier, the official CBS figure (not calculated by the importer). |
 
-Available at the time of writing: CPI, CPI change and wage increase November 2022 – October 2026; income 2022–2025 (2025 is provisional).
+Available at the time of writing: CPI, CPI change, food CPI and wage increase November 2022 – October 2026; income 2022–2025 (2025 is provisional).
+
+**Added columns.** `foodCPI` and `foodCPIYearlyRateOfChange` were added to the table later. `initdb.sql` contains them, but it only runs when a new database is created, so the importer adds them to an existing database itself when they are missing (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, see `ADDED_COLUMNS`). The first run after they are added updates every stored month once, because the new columns are still empty.
 
 ## How the Values Are Derived
 
@@ -50,7 +55,8 @@ The configuration lives at the top of the script:
 * `CPI_BASE_YEAR`: base year of the stored CPI, currently `2015`.
 * `START_MONTH`: first month to import, written as YYYY-MM, currently `2022-11`. It can be overridden with the environment variable `ECONOMY_IMPORTER_START_MONTH`, for example `ECONOMY_IMPORTER_START_MONTH=2023-01`.
 * `CBS_BASE_URL`: base URL of the CBS OData API.
-* `CPI_TABLE`, `INCOME_TABLE`, `WAGE_TABLE`: the CBS table IDs.
+* `CPI_TABLE`, `INCOME_TABLE`, `WAGE_TABLE`, `FOOD_CPI_TABLE`: the CBS table IDs.
+* `FOOD_CPI_CATEGORY`: the spending category of the food CPI in 86141NED, *010000 Voeding en alcoholvrije dranken*.
 * `INCOME_CONCEPTS`: the income concepts that are imported and the column each one fills.
 * `column_limits`: the largest value each `DECIMAL` column can hold. The importer stops before writing anything if a value would not fit.
 

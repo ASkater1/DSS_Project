@@ -5,11 +5,11 @@
 This service is responsible for displaying the Food Security Dashboard: the Streamlit website that can be opened in a web browser at http://localhost:8501.
 
 The dashboard reads all its data from the PostgreSQL database and presents it on four pages, chosen in a fixed sidebar on the left:
-· Overview: Shows the number of supermarket chains, their combined market share and the price of the essential basket per supermarket.
+· Overview: Shows the number of supermarket chains, their combined market share, the market share per supermarket over the years, the price of the essential basket per supermarket, and food prices compared with household income.
 
 · Prices: Allows users to compare supermarket prices, search for individual products and follow a price index per category over time.
 
-· Economy: Shows the monthly Consumer Price Index (CPI, 2015 = 100), the CPI change on the previous month and on a year earlier, and the average disposable income.
+· Economy: Shows KPI cards with the change in food prices and in all prices compared with a year earlier, the monthly Consumer Price Index (CPI, 2015 = 100), the CPI change on the previous month and on a year earlier, and the average disposable income.
 
 · Municipalities: Shows supermarket accessibility per Dutch municipality on a map, compared to population, and in a table.
 
@@ -61,7 +61,8 @@ The data_access.py script is organized into three main sections:
 * Helper functions: opens the database connection, runs a query and returns the result as a DataFrame, and converts database decimals to numbers.
 * Data loading functions: one function per type of data used by the dashboard:
   * load_supermarkets(): supermarket IDs, names and market shares.
-  * load_economy_statistics(): one row per month with the CPI, both CPI rates of change, the incomes and the wage increase.
+  * load_market_shares_per_supermarket(): the market share of every supermarket per year, from the MarketShares table (empty when that table does not exist yet).
+  * load_economy_statistics(): one row per month with the CPI, both CPI rates of change, the incomes, the wage increase, and the food CPI with its yearly change (empty when the financial importer has not added those columns yet).
   * load_municipalities(): population and supermarket accessibility per municipality.
   * load_price_index_links(): the monthly price change of the same products per supermarket and category, the basis of the price index. Each product's last known price is carried forward to the months without a price record.
   * project_price_index(): the projection (dashed line) for supermarkets whose real price data ends before the end of the chart.
@@ -103,6 +104,14 @@ The pages replace the tabs the dashboard used before. With tabs, Streamlit build
 * All food combines all food categories, so non-food products such as shampoo do not affect it.
 
 Only price changes can be compared between supermarkets, not price levels, so all lines start at 100 in the same base month: the first month shown. With the date slider covering the whole period (the default) this is November 2022, the first month of the supermarket price data; when the date range filter of the Prices page starts later, that month becomes the base month. A supermarket whose data starts after the base month (Lidl, from November 2025) starts at the CPI level of its own first month and follows its own price changes from there; a note above the chart says which supermarkets start later. Its level therefore shows how its prices moved compared with general inflation since it started, not how it compares with the other supermarkets before that month.
+
+**Note: Overview layout**: At the top of the Overview page, below the page title, a row of three KPI cards shows the number of supermarket chains, their combined market share and the average basket price. Below that row, the two Overview charts with data are shown next to each other: Market share per supermarket on the left and Food prices compared with household income on the right. The essential basket sections follow below the charts.
+
+**Note: Market share per supermarket**: Below the KPI cards on the left, the Overview page shows a line chart with the market share of every supermarket chain per year, from the MarketShares table filled by the market shares importer (code/importer/market_shares). It shows how the share of each chain in Dutch supermarket sales develops over time; the four chains together make up the combined market share in the KPI card above it. A grey dashed line, Other supermarkets, shows the rest of the market per year: 100% minus the four chains together (22.6% in 2025). It is calculated in app.py and not stored in the database. Only the years within the Overview page's date range are shown, in the same way as that KPI card, so with the default range the chart covers 2022 to 2025. The data is loaded by load_market_shares_per_supermarket() in data_access.py. When the MarketShares table does not exist yet, the chart shows a message to run the market shares importer.
+
+**Note: Economy KPI cards**: At the top of the Economy page, two KPI cards show the change compared with the same month a year earlier for the last month in the date range: food prices (CPI of food and soft drinks, CBS 86141NED) and all prices (CPI of all goods and services, the inflation figure). Both are the official CBS figures from the EconomyStatistics table. Below the value, the delta shows the change compared with the previous month, in red when it rises (rising prices are bad for affordability), and a small trend line shows the yearly change over the selected period. When the food CPI is not in the database yet, the card shows n/a and asks to run the financial importer.
+
+**Note: Food prices compared with household income**: Below the KPI cards on the right, the Overview page shows the food CPI and the average disposable household income on one axis, both 100 in the first month of the Overview page's date range, so it is easy to see which rose faster. When the income line is above the food line, food takes up a smaller share of the household budget. Disposable income is published by CBS per year, so it is drawn as one point in the middle of each year (July), connected by straight lines; the values in between are an estimate. Because the base month uses the income of its whole year, the first step of the income line can look larger than the monthly food prices it is compared with. The chart follows the date filter of the Overview page.
 
 **Note: CPI line**: The price index chart also shows the consumer price index (CPI, all goods and services, from the EconomyStatistics table) as a grey line, so supermarket price changes can be compared with general inflation. The CPI is rescaled to 100 in the same base month as the supermarket lines: the CPI of each month divided by the CPI of the base month, times 100. The CPI level is used instead of the stored monthly rates of change, because those are rounded to one decimal and would add up rounding errors. The economy statistics start in November 2022, the same month as the supermarket price data, so the CPI is available for every base month and for the starting month of every supermarket. Note that the CPI covers all goods and services (including energy, rent and services), while the supermarket index only covers supermarket products.
 
